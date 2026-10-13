@@ -132,7 +132,7 @@ exclude = [
 
 [project.urls]
 Homepage = "https://metrka.com"
-Repository = "https://github.com/brainality/metrka-core"
+Repository = "https://github.com/metrka/metrka-core"
 
 [project.optional-dependencies]
 dev = [
