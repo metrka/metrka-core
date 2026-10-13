@@ -6,7 +6,7 @@
 
 
 [![Commits](https://img.shields.io/github/commit-activity/t/metrka/metrka-core?label=commits)](https://github.com/metrka/metrka-core/commits/main)
-[![Commits since release](https://img.shields.io/github/commits-since/metrka/metrka-core/latest?sort=semver&label=since%20release)](https://github.com/metrka/metrka-core/compare/v1.0.0...main)
+[![Commits since release](https://img.shields.io/github/commits-since/metrka/metrka-core/latest?sort=semver&label=since%20release)](https://github.com/metrka/metrka-core/compare/v1.1.0...main)
 [![Code size](https://img.shields.io/github/languages/code-size/metrka/metrka-core?label=code%20size)](https://github.com/metrka/metrka-core)
 [![Contributors](https://img.shields.io/github/contributors/metrka/metrka-core)](https://github.com/metrka/metrka-core/graphs/contributors)
 [![Last commit](https://img.shields.io/github/last-commit/metrka/metrka-core?label=last%20commit)](https://github.com/metrka/metrka-core/commits/main)
@@ -97,7 +97,7 @@ that exact artifact:
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-python -m pip install .\metrka_core-1.0.0-py3-none-any.whl
+python -m pip install .\metrka_core-1.1.0-py3-none-any.whl
 metrka --version
 ```
 
@@ -199,6 +199,12 @@ workspaces:
 
 Create that form with `metrka workspace init --placement managed` and explicit
 `--definition-root` and `--data-root` values.
+
+A source that keeps each dataset in its own folder adds `layout: dataset_folders`
+to either placement. A managed source then keeps each dataset's data in a folder
+of the same name under its `data_root`; see
+[Publication artifact access](PUBLIC_API.md#publication-artifact-access) for both
+forms.
 
 Validate static workspace configuration before the first run or in CI:
 

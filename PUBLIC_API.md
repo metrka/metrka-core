@@ -142,6 +142,25 @@ Here `fl_healthcharts/adult_substance_abuse_beds/` holds its own `conf/` and
 exactly one stream named `adult_substance_abuse_beds`, so the dataset is
 `fl_healthcharts.adult_substance_abuse_beds`. Run and validate it by that name.
 
+A managed source keeps the same folders, with each dataset's data in a folder
+of the same name under its `data_root`:
+
+```yaml
+schema_version: 1
+workspaces:
+  fl_healthcharts:
+    placement: managed
+    definition_root: datasets/fl_healthcharts
+    data_root: D:/metrka-data/fl_healthcharts
+    layout: dataset_folders
+```
+
+Here the dataset's definitions are in
+`datasets/fl_healthcharts/adult_substance_abuse_beds/conf/` and its data in
+`D:/metrka-data/fl_healthcharts/adult_substance_abuse_beds/`. The source's
+`data_root` must exist; the dataset's own folder below it is created by its
+first run.
+
 Manifest paths are restricted to `files/silver/manifests/`. Contract snapshot
 paths are restricted to `contracts/`. Every supplied path must be a canonical
 POSIX relative path. Absolute paths, parent traversal, Windows drive
@@ -460,7 +479,9 @@ placements. A portable entry declares `workspace_root` and resolves:
 ```
 
 A managed entry declares `definition_root` and `data_root`, which may live in
-different repositories, disks, mounts, or volumes. Relative paths are resolved
+different repositories, disks, mounts, or volumes. Either placement may add
+`layout: dataset_folders` for a source that keeps each dataset in its own
+folder. Relative paths are resolved
 from the placement file. Unknown fields, incomplete placement entries, reused
 roots, and missing directories fail before pipeline composition. A custom
 resolver remains supported. Pipeline composition treats both placements

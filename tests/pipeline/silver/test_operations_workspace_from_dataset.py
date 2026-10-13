@@ -18,6 +18,8 @@ from metrka_core.pipeline.silver.reconcile_publications import reconciliation_lo
 def _resolver(tmp_path: Path) -> YamlWorkspaceLocationResolver:
     (tmp_path / "flat").mkdir()
     (tmp_path / "fl" / "beds").mkdir(parents=True)
+    (tmp_path / "mfl" / "beds").mkdir(parents=True)
+    (tmp_path / "store" / "mfl").mkdir(parents=True)
     registry = tmp_path / "workspaces.local.yaml"
     registry.write_text(
         yaml.safe_dump(
@@ -30,6 +32,12 @@ def _resolver(tmp_path: Path) -> YamlWorkspaceLocationResolver:
                         "workspace_root": str(tmp_path / "fl"),
                         "layout": "dataset_folders",
                     },
+                    "mfl": {
+                        "placement": "managed",
+                        "definition_root": str(tmp_path / "mfl"),
+                        "data_root": str(tmp_path / "store" / "mfl"),
+                        "layout": "dataset_folders",
+                    },
                 },
             }
         ),
@@ -39,12 +47,20 @@ def _resolver(tmp_path: Path) -> YamlWorkspaceLocationResolver:
 
 
 @pytest.mark.parametrize(
-    ("dataset_id", "folder"), [("flat.records", "flat"), ("fl.beds", "fl/beds")]
+    ("dataset_id", "folder", "data"),
+    [
+        ("flat.records", "flat", "flat/data"),
+        ("fl.beds", "fl/beds", "fl/beds/data"),
+        ("mfl.beds", "mfl/beds", "store/mfl/beds"),
+    ],
 )
-def test_candidate_dataset_names_its_folder(tmp_path: Path, dataset_id: str, folder: str) -> None:
+def test_candidate_dataset_names_its_folder(
+    tmp_path: Path, dataset_id: str, folder: str, data: str
+) -> None:
     location = candidate_location(_resolver(tmp_path), dataset_id=dataset_id, workspace=None)
 
     assert location.definition_root == (tmp_path / folder).resolve()
+    assert location.data_root == (tmp_path / data).resolve()
 
 
 @pytest.mark.parametrize(

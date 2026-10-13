@@ -131,11 +131,13 @@ to a clean `main` branch:
 
 ```powershell
 foreach ($placement in @("portable", "managed")) {
-    & .elease\installed_e2e_smokeun-installed-e2e-smoke.ps1 `
-        -WorkspacePlacement $placement
+    foreach ($layout in @("flat", "dataset_folders")) {
+        & .\release\installed_e2e_smoke\run-installed-e2e-smoke.ps1 `
+            -WorkspacePlacement $placement -WorkspaceLayout $layout
 
-    if (-not $?) {
-        throw "Installed E2E smoke failed for placement: $placement"
+        if (-not $?) {
+            throw "Installed E2E smoke failed for placement $placement, layout $layout"
+        }
     }
 }
 ```

@@ -148,7 +148,14 @@ def test_the_glossary_sits_beside_the_dataset_folders(tmp_path: Path) -> None:
     source = WorkspaceLocation.portable(
         workspace_name="src", workspace_root=tmp_path / "src", dataset_folders=True
     )
+    managed = WorkspaceLocation.managed(
+        workspace_name="src",
+        definition_root=tmp_path / "src",
+        data_root=tmp_path / "store",
+        dataset_folders=True,
+    )
     flat = WorkspaceLocation.portable(workspace_name="flat", workspace_root=tmp_path / "flat")
 
     assert source.dataset_folder("beds").glossary_path == (tmp_path / "src" / "glossary.yaml")
+    assert managed.dataset_folder("beds").glossary_path == (tmp_path / "src" / "glossary.yaml")
     assert flat.glossary_path == (tmp_path / "flat" / "glossary.yaml")

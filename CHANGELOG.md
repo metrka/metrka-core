@@ -7,6 +7,24 @@ modules remain implementation details unless they are listed in
 `PUBLIC_API.md`.
 
 
+## [1.1.0] - 2026-10-14
+
+### Configuration
+
+- A managed workspace can keep each dataset in its own folder
+  (`layout: dataset_folders`), as a portable one already could. A dataset's
+  definitions are in its folder under `definition_root`, and its data in a folder
+  of the same name under `data_root`. The source's `data_root` must exist; each
+  dataset's own data folder is created by its first run.
+
+### Release
+
+- The installed end-to-end smoke takes `-WorkspaceLayout flat|dataset_folders`,
+  and the release runs it for both layouts of both placements.
+- The smoke command in `RELEASING.md` is readable again; two of its path
+  separators had been saved as control characters.
+
+
 ## [1.0.0] - 2026-10-13
 
 First public release.

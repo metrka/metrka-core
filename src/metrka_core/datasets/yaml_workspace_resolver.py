@@ -137,6 +137,14 @@ def load_workspace_locations(config_path: str | Path) -> dict[str, WorkspaceLoca
                 f"supported={supported}"
             ) from error
 
+        layout = raw_entry.get("layout")
+
+        if layout is not None and layout != DATASET_FOLDERS_LAYOUT:
+            raise ValueError(
+                f"Workspace {workspace_name!r} has unsupported layout {layout!r}; "
+                f"supported={[DATASET_FOLDERS_LAYOUT]}"
+            )
+
         if placement is WorkspacePlacement.PORTABLE:
             _require_exact_keys(
                 raw_entry,
@@ -145,14 +153,6 @@ def load_workspace_locations(config_path: str | Path) -> dict[str, WorkspaceLoca
                 workspace_name=workspace_name,
                 config_path=resolved_config_path,
             )
-            layout = raw_entry.get("layout")
-
-            if layout is not None and layout != DATASET_FOLDERS_LAYOUT:
-                raise ValueError(
-                    f"Workspace {workspace_name!r} has unsupported layout {layout!r}; "
-                    f"supported={[DATASET_FOLDERS_LAYOUT]}"
-                )
-
             location = WorkspaceLocation.portable(
                 workspace_name=workspace_name,
                 workspace_root=_resolve_path(
@@ -166,6 +166,7 @@ def load_workspace_locations(config_path: str | Path) -> dict[str, WorkspaceLoca
             _require_exact_keys(
                 raw_entry,
                 expected={"placement", "definition_root", "data_root"},
+                optional=frozenset({"layout"}),
                 workspace_name=workspace_name,
                 config_path=resolved_config_path,
             )
@@ -179,6 +180,7 @@ def load_workspace_locations(config_path: str | Path) -> dict[str, WorkspaceLoca
                 data_root=_resolve_path(
                     raw_entry["data_root"], field_name="data_root", config_path=resolved_config_path
                 ),
+                dataset_folders=layout == DATASET_FOLDERS_LAYOUT,
             )
 
         for root, field_name in (
@@ -220,6 +222,7 @@ class YamlWorkspaceLocationResolver:
 
         normalized_name = workspace_name.strip()
         location = self.locations.get(normalized_name)
+        source_data_root: Path | None = None
 
         if location is None and "." in normalized_name:
             identity = parse_dataset_id(normalized_name)
@@ -228,6 +231,7 @@ class YamlWorkspaceLocationResolver:
 
             if source is not None and source.dataset_folders:
                 location = source.dataset_folder(dataset_name)
+                source_data_root = source.data_root
 
                 if not location.definition_root.is_dir():
                     raise RuntimeError(
@@ -255,10 +259,15 @@ class YamlWorkspaceLocationResolver:
                 f"Workspace {normalized_name!r} data_root is not a directory: {location.data_root}"
             )
 
-        if not location.is_portable and not location.data_root.is_dir():
+        # Managed data lives on storage that may be missing, such as an unmounted volume.
+        # A dataset folder's own data folder is created by its first run, so the
+        # source's data_root is the one that must already exist.
+        required_data_root = source_data_root or location.data_root
+
+        if not location.is_portable and not required_data_root.is_dir():
             raise RuntimeError(
                 f"Managed workspace {normalized_name!r} data_root is not available: "
-                f"{location.data_root}"
+                f"{required_data_root}"
             )
 
         return location
