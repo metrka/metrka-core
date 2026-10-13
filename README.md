@@ -1,16 +1,16 @@
 # metrka-core
-[![Verify metrka-core](https://github.com/brainality/metrka-core/actions/workflows/static-analysis.yml/badge.svg?branch=main)](https://github.com/brainality/metrka-core/actions/workflows/static-analysis.yml)
-[![Release](https://img.shields.io/github/v/release/brainality/metrka-core?display_name=tag&sort=semver)](https://github.com/brainality/metrka-core/releases/latest)
+[![Verify metrka-core](https://github.com/metrka/metrka-core/actions/workflows/static-analysis.yml/badge.svg?branch=main)](https://github.com/metrka/metrka-core/actions/workflows/static-analysis.yml)
+[![Release](https://img.shields.io/github/v/release/metrka/metrka-core?display_name=tag&sort=semver)](https://github.com/metrka/metrka-core/releases/latest)
 [![Python](https://img.shields.io/badge/python-%3E%3D3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![License](https://img.shields.io/github/license/brainality/metrka-core)](https://github.com/brainality/metrka-core/blob/main/LICENSE)
+[![License](https://img.shields.io/github/license/metrka/metrka-core)](https://github.com/metrka/metrka-core/blob/main/LICENSE)
 
 
-[![Commits](https://img.shields.io/github/commit-activity/t/brainality/metrka-core?label=commits)](https://github.com/brainality/metrka-core/commits/main)
-[![Commits since release](https://img.shields.io/github/commits-since/brainality/metrka-core/latest?sort=semver&label=since%20release)](https://github.com/brainality/metrka-core/compare/v1.0.0...main)
-[![Code size](https://img.shields.io/github/languages/code-size/brainality/metrka-core?label=code%20size)](https://github.com/brainality/metrka-core)
-[![Contributors](https://img.shields.io/github/contributors/brainality/metrka-core)](https://github.com/brainality/metrka-core/graphs/contributors)
-[![Last commit](https://img.shields.io/github/last-commit/brainality/metrka-core?label=last%20commit)](https://github.com/brainality/metrka-core/commits/main)
-[![Delivered features](https://img.shields.io/github/issues-search?query=repo%3Abrainality%2Fmetrka-core%20is%3Aissue%20is%3Aclosed%20label%3Aenhancement&label=features&color=blue)](https://github.com/brainality/metrka-core/issues?q=is%3Aissue%20is%3Aclosed%20label%3Aenhancement)
+[![Commits](https://img.shields.io/github/commit-activity/t/metrka/metrka-core?label=commits)](https://github.com/metrka/metrka-core/commits/main)
+[![Commits since release](https://img.shields.io/github/commits-since/metrka/metrka-core/latest?sort=semver&label=since%20release)](https://github.com/metrka/metrka-core/compare/v1.0.0...main)
+[![Code size](https://img.shields.io/github/languages/code-size/metrka/metrka-core?label=code%20size)](https://github.com/metrka/metrka-core)
+[![Contributors](https://img.shields.io/github/contributors/metrka/metrka-core)](https://github.com/metrka/metrka-core/graphs/contributors)
+[![Last commit](https://img.shields.io/github/last-commit/metrka/metrka-core?label=last%20commit)](https://github.com/metrka/metrka-core/commits/main)
+[![Delivered features](https://img.shields.io/github/issues-search?query=repo%3Ametrka%2Fmetrka-core%20is%3Aissue%20is%3Aclosed%20label%3Aenhancement&label=features&color=blue)](https://github.com/metrka/metrka-core/issues?q=is%3Aissue%20is%3Aclosed%20label%3Aenhancement)
 
 Core transformation utilities for building reproducible, auditable datasets from public data sources.
 
@@ -90,7 +90,7 @@ raw data
 
 Metrka Core requires Python 3.12 or newer. For a released installation, create
 an isolated environment, download the verified wheel from the matching
-[GitHub Release](https://github.com/brainality/metrka-core/releases), and install
+[GitHub Release](https://github.com/metrka/metrka-core/releases), and install
 that exact artifact:
 
 ```powershell
@@ -105,7 +105,7 @@ For development, clone the repository and install the checkout in editable
 mode:
 
 ```powershell
-git clone https://github.com/brainality/metrka-core.git
+git clone https://github.com/metrka/metrka-core.git
 Set-Location .\metrka-core
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
