@@ -1,0 +1,195 @@
+name: Verify metrka-core
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  code-quality:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Check Ruff formatting
+        run: python -m ruff format --check src tests release
+
+      - name: Run Ruff
+        run: python -m ruff check src tests release
+
+      - name: Run mypy
+        run: python -m mypy src
+
+      - name: Run non-integration tests
+        run: python -m pytest -m "not integration" -q
+
+  wheel-provenance:
+    needs: code-quality
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install wheel build tooling
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build
+
+      - name: Generate immutable build provenance
+        env:
+          METRKA_BUILD_BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: PYTHONPATH=src python -m metrka_core.build_provenance
+
+      - name: Build wheel
+        run: python -m build --wheel
+
+      - name: Verify provenance is packaged
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+
+          wheels = list(Path("dist").glob("metrka_core-*.whl"))
+          assert len(wheels) == 1, wheels
+
+          with ZipFile(wheels[0]) as archive:
+              assert "metrka_core/_build_provenance.json" in archive.namelist()
+          PY
+
+      - name: Verify wheel outside a Git checkout
+        run: |
+          python -m venv "$RUNNER_TEMP/metrka-wheel"
+          wheel_path=$(find dist -maxdepth 1 -name 'metrka_core-*.whl' -print -quit)
+          "$RUNNER_TEMP/metrka-wheel/bin/python" -m pip install --no-deps "$wheel_path"
+
+          cd "$RUNNER_TEMP"
+          METRKA_EXPECTED_COMMIT="$GITHUB_SHA" \
+            "$RUNNER_TEMP/metrka-wheel/bin/python" - <<'PY'
+          import os
+
+          from metrka_core.pipeline.provenance import collect_core_code_revision
+
+          revision, dirty = collect_core_code_revision()
+
+          assert revision.repository == "metrka-core"
+          assert revision.commit_sha == os.environ["METRKA_EXPECTED_COMMIT"]
+          assert dirty is False
+          PY
+
+  postgres-integration:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: metrka_migration_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      PGPASSWORD: postgres
+      METRKA_MIGRATION_OWNER_ROLE: metrka_owner
+      METRKA_MIGRATION_DSN: >-
+        dbname=metrka_migration_test
+        host=127.0.0.1
+        port=5432
+        user=metrka_migrator
+        password=metrka_migrator_ci
+      METRKA_OPERATIONS_DSN: >-
+        dbname=metrka_migration_test
+        host=127.0.0.1
+        port=5432
+        user=metrka_operator
+        password=metrka_operator_ci
+      METRKA_MIGRATION_TEST_DSN: >-
+        dbname=metrka_migration_test
+        host=127.0.0.1
+        port=5432
+        user=postgres
+        password=postgres
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Provision database roles
+        run: |
+          psql \
+            --host 127.0.0.1 \
+            --port 5432 \
+            --username postgres \
+            --dbname metrka_migration_test \
+            --file src/metrka_core/metadata/migrations/bootstrap/provision_metadata_roles.sql
+          psql \
+            --host 127.0.0.1 \
+            --port 5432 \
+            --username postgres \
+            --dbname metrka_migration_test \
+            --command "ALTER ROLE metrka_migrator PASSWORD 'metrka_migrator_ci'"
+          psql \
+            --host 127.0.0.1 \
+            --port 5432 \
+            --username postgres \
+            --dbname metrka_migration_test \
+            --command "ALTER ROLE metrka_operator PASSWORD 'metrka_operator_ci'"
+
+      - name: Apply migrations twice
+        run: |
+          python -m metrka_core.metadata.migrations upgrade
+          python -m metrka_core.metadata.migrations upgrade
+
+      - name: Verify migration head
+        run: |
+          python -m metrka_core.metadata.migrations current
+          python -m metrka_core.metadata.migrations check
+
+      - name: Run PostgreSQL integration tests
+        run: python -m pytest -m integration -q

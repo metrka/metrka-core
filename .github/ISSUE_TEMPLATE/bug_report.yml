@@ -1,0 +1,86 @@
+name: Bug report
+description: Report reproducible incorrect behavior in metrka-core.
+title: "bug: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a problem.
+
+        Do not include passwords, DSNs, tokens, private dataset contents,
+        customer information, or other sensitive data.
+
+  - type: input
+    id: metrka_version
+    attributes:
+      label: Metrka version
+      description: Paste the output of `metrka --version`.
+      placeholder: metrka-core 1.0.0 (commit ...)
+    validations:
+      required: true
+
+  - type: input
+    id: python_version
+    attributes:
+      label: Python version
+      placeholder: Python 3.14.0
+    validations:
+      required: true
+
+  - type: input
+    id: operating_system
+    attributes:
+      label: Operating system
+      placeholder: Windows 11, Ubuntu 24.04, or another operating system
+    validations:
+      required: true
+
+  - type: textarea
+    id: observed_behavior
+    attributes:
+      label: What happened?
+      description: Describe the observed behavior.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_behavior
+    attributes:
+      label: What did you expect?
+      description: Describe the expected behavior.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: How can the problem be reproduced?
+      description: Provide the smallest possible example, command, or configuration.
+    validations:
+      required: true
+
+  - type: textarea
+    id: relevant_output
+    attributes:
+      label: Relevant output
+      description: Include the relevant traceback or log output without secrets.
+      render: text
+
+  - type: checkboxes
+    id: sensitive_information
+    attributes:
+      label: Sensitive information
+      options:
+        - label: I have removed passwords, tokens, DSNs, customer data, and other sensitive information.
+          required: true
+
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Provide the acceptance criterias.
+    validations:
+      required: true

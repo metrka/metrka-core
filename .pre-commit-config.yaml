@@ -1,0 +1,40 @@
+default_install_hook_types:
+  - pre-commit
+  - pre-push
+
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-format
+        name: Ruff format
+        entry: python -m ruff format
+        language: system
+        types_or:
+          - python
+          - pyi
+        stages:
+          - pre-commit
+
+      - id: ruff
+        name: Ruff
+        entry: python -m ruff check src tests release
+        language: system
+        pass_filenames: false
+        stages:
+          - pre-commit
+
+      - id: mypy
+        name: mypy
+        entry: python -m mypy src
+        language: system
+        pass_filenames: false
+        stages:
+          - pre-push
+
+      - id: unit-tests
+        name: Unit tests
+        entry: python -m pytest -m "not integration" -q
+        language: system
+        pass_filenames: false
+        stages:
+          - pre-push

@@ -1,0 +1,61 @@
+# The smoke workspace's main.yaml, shared through a template so the installed wheel
+# proves that templates are filled in. The smoke script serves the CSV from a local
+# HTTP server and passes its address as download_url.
+
+version: 1
+
+inputs:
+  download_url:
+    description: Address of the CSV on the smoke test's local HTTP server.
+
+main:
+  workspace_name: smoke_counties
+
+  streams:
+    county_events:
+      official_filename: county_events.csv
+      download_url: ${download_url}
+      yaml_contract_name: contract.yaml
+
+      silver:
+        partition_by: version_period
+        version_period:
+          strategy: max_column
+          column: Year
+          format: "%Y"
+          grain: year
+        temporal_coverage:
+          table: county_events
+          column: reporting_year
+          grain: year
+        input:
+          format: csv
+        outputs:
+          - parquet
+          - csv
+
+      catalog:
+        highlights:
+          - key: counties_covered
+            label: Counties covered
+            calculation: distinct_count
+            table: county_events
+            column: geography_name
+
+  pipeline:
+    quality:
+      config: quality.yaml
+
+    acquisition:
+      extractor: http.files
+      options:
+        timeout_seconds: 30
+        min_bytes: 1
+        user_agent: metrka-installed-e2e-smoke
+      backfill:
+        source_url: manual_upload
+        match_mode: exact
+
+    steps:
+      - action: bronze.ingest
+      - action: silver.process

@@ -1,0 +1,146 @@
+[build-system]
+requires = ["setuptools>=77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "metrka-core"
+version = "1.0.0"
+description = "Reusable building blocks for Metrka data pipelines"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [
+  { name = "Alina Jakel", email = "alina.jakel@kterla.com" },
+]
+
+maintainers = [
+  { name = "Alina Jakel", email = "alina.jakel@kterla.com" },
+]
+
+
+dependencies = [
+  "numpy>=2.5.2,<3.0",
+  "pandas>=3.0.5,<4.0",
+  "filelock>=3.24.2,<4.0",
+  "PyYAML>=6.0",
+  "psycopg[binary]>=3.1",
+  "pydantic>=2.0",
+  "openpyxl>=3.1",
+  "lxml>=5.0",
+  "pyarrow>=16.0",
+  "alembic>=1.19,<2.0",
+  "SQLAlchemy>=2.0,<3.0",
+  "sqlparse>=0.5,<1.0",
+
+]
+
+[project.scripts]
+metrka = "metrka_core.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+exclude = [
+  "metrka_core._scratch*",
+  "metrka_core._docs*",
+  "metrka_core.*._scratch*",
+  "metrka_core.*._docs*",
+]
+
+[tool.setuptools.package-data]
+metrka_core = [
+  "py.typed",
+  "_build_provenance.json",
+  "metadata/migrations/script.py.mako",
+  "metadata/migrations/sql/*.sql",
+  "metadata/migrations/bootstrap/*.sql",
+]
+
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = true
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+markers = [
+  "integration: requires external services",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = [
+  "build",
+  "dist",
+  ".venv",
+  "src/metrka_core/_docs",
+  "src/metrka_core/_scratch",
+  "src/metrka_core/transform/_scratch",
+]
+src = ["src"]
+
+[tool.ruff.lint] 
+select = [
+  "E", "F", # pycodestyle + pyflakes
+  "I",      # isort
+  "B",      # bugbear
+  "UP",     # pyupgrade 
+  "SIM",    # simplifications
+  "S101",   # runtime invariants must not depend on assert
+  ]
+
+  ignore = [
+  "E501",      # allow long lines when it reads better (docs/errors)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["metrka_core"]
+section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
+combine-as-imports = false
+split-on-trailing-comma = false
+
+[tool.mypy]
+mypy_path = "src"
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+no_implicit_optional = true
+check_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_defs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+enable_error_code = [
+  "possibly-undefined",
+]
+exclude = [
+  "^src/metrka_core/_docs/",
+  "^src/metrka_core/_scratch/",
+  "^src/metrka_core/transform/_scratch/",
+]
+
+
+
+[project.urls]
+Homepage = "https://metrka.com"
+Repository = "https://github.com/brainality/metrka-core"
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "pytest-mock>=3.12",
+  "pre-commit>=4.0",
+  "ruff>=0.6",
+  "mypy>=1.10",
+  "pandas-stubs>=2.0",
+  "types-PyYAML>=6.0",
+]

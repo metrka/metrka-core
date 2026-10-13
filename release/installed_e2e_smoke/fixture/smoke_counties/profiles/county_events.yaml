@@ -1,0 +1,58 @@
+# Table profile: county counts with a statewide total row to reconcile.
+
+version: 1
+
+renamable: [Count]
+
+table:
+  columns:
+    County:
+      rename_to: geography_name
+      cast_to: string
+      meta:
+        description: County name, or the derived [[unallocated|Unallocated]] row.
+
+    Count:
+      rename_to: count
+      cast_to: int
+      meta:
+        description: Count for the county and year.
+
+    Year:
+      rename_to: reporting_year
+      cast_to: int
+      meta:
+        description: Year the count refers to.
+
+  parent_child_reconciliation:
+    group_by:
+      - reporting_year
+
+    parent:
+      column: geography_name
+      equals: Statewide
+
+    measure_column: count
+
+    residual:
+      label_column: geography_name
+      label_value: Unallocated
+
+    remove_parent: true
+    negative_difference: fail
+
+  canonical_order:
+    - geography_name
+    - count
+    - reporting_year
+
+methodology:
+  rules:
+    parent_child_reconciliation:
+      description: >-
+        The Statewide row is compared with the sum of the county rows of the same
+        year and then removed. A positive difference is published as an
+        [[unallocated]] row.
+
+  limitations:
+    - The values are made up for the installed release smoke test.

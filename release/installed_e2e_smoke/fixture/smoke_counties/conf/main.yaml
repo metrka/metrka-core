@@ -1,0 +1,4 @@
+uses: county_csv
+with:
+  # The smoke script replaces this marker with its local HTTP server's address.
+  download_url: SMOKE_SOURCE_URL
