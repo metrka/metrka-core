@@ -4,6 +4,8 @@ param(
     [string]$PythonCommand = "python",
     [ValidateSet("portable", "managed")]
     [string]$WorkspacePlacement = "portable",
+    [ValidateSet("flat", "dataset_folders")]
+    [string]$WorkspaceLayout = "flat",
     [string]$PostgresImage = "postgres:17",
     [switch]$KeepDatabase,
     [switch]$KeepFiles
@@ -16,6 +18,8 @@ $workspaceName = "smoke_counties"
 $streamName = "county_events"
 $tableName = "county_events"
 $datasetId = "$workspaceName.$streamName"
+# In dataset folders the workspace is a source; one dataset folder is run by its dataset ID.
+$runName = if ($WorkspaceLayout -eq "dataset_folders") { $datasetId } else { $workspaceName }
 $sourceUrlMarker = "SMOKE_SOURCE_URL"
 $environmentVariableNames = @(
     "METRKA_ENV",
@@ -388,8 +392,19 @@ try {
     New-Item -ItemType Directory -Path (Split-Path -Parent $definitionRoot) -Force | Out-Null
     Copy-Item -LiteralPath $fixtureWorkspace -Destination $definitionRoot -Recurse
 
+    # In dataset folders the fixture becomes a source: its conf moves into the dataset's
+    # own folder, while profiles, templates and the glossary stay beside it.
+    if ($WorkspaceLayout -eq "dataset_folders") {
+        $datasetDefinitionRoot = Join-Path $definitionRoot $streamName
+        New-Item -ItemType Directory -Path $datasetDefinitionRoot -Force | Out-Null
+        Move-Item -LiteralPath (Join-Path $definitionRoot "conf") -Destination $datasetDefinitionRoot
+    }
+    else {
+        $datasetDefinitionRoot = $definitionRoot
+    }
+
     # The fixture's main.yaml names the source by a marker; the address is known only now.
-    $mainPath = Join-Path $definitionRoot "conf\main.yaml"
+    $mainPath = Join-Path $datasetDefinitionRoot "conf\main.yaml"
     $mainText = [IO.File]::ReadAllText($mainPath)
 
     if (-not $mainText.Contains($sourceUrlMarker)) {
@@ -415,28 +430,41 @@ try {
     )
 
     $definitionRootYaml = $definitionRoot.Replace("\", "/")
+    $layoutYaml = if ($WorkspaceLayout -eq "dataset_folders") {
+        "`n    layout: dataset_folders"
+    }
+    else {
+        ""
+    }
 
+    # $dataRoot is the run's own data: below the source's data_root in dataset folders.
     if ($WorkspacePlacement -eq "managed") {
-        $dataRoot = Join-Path $smokeRoot "managed-data\$workspaceName"
-        New-Item -ItemType Directory -Path $dataRoot -Force | Out-Null
-        $dataRootYaml = $dataRoot.Replace("\", "/")
+        $sourceDataRoot = Join-Path $smokeRoot "managed-data\$workspaceName"
+        New-Item -ItemType Directory -Path $sourceDataRoot -Force | Out-Null
+        $dataRoot = if ($WorkspaceLayout -eq "dataset_folders") {
+            Join-Path $sourceDataRoot $streamName
+        }
+        else {
+            $sourceDataRoot
+        }
+        $dataRootYaml = $sourceDataRoot.Replace("\", "/")
         Write-Utf8File -Path $workspacesConfigPath -Content @"
 schema_version: 1
 workspaces:
   ${workspaceName}:
     placement: managed
     definition_root: "$definitionRootYaml"
-    data_root: "$dataRootYaml"
+    data_root: "$dataRootYaml"$layoutYaml
 "@
     }
     else {
-        $dataRoot = Join-Path $definitionRoot "data"
+        $dataRoot = Join-Path $datasetDefinitionRoot "data"
         Write-Utf8File -Path $workspacesConfigPath -Content @"
 schema_version: 1
 workspaces:
   ${workspaceName}:
     placement: portable
-    workspace_root: "$definitionRootYaml"
+    workspace_root: "$definitionRootYaml"$layoutYaml
 "@
     }
 
@@ -576,7 +604,7 @@ workspaces:
     Invoke-Checked -FilePath $smokeMetrka -ArgumentList @(
         "workspace",
         "validate",
-        $workspaceName,
+        $runName,
         "--workspaces-config-path",
         $workspacesConfigPath
     ) -WorkingDirectory $smokeRoot
@@ -584,13 +612,13 @@ workspaces:
     Write-Step "Running the smoke workspace for the first time"
     Invoke-Checked -FilePath $smokeMetrka -ArgumentList @(
         "run",
-        $workspaceName,
+        $runName,
         "--workspaces-config-path",
         $workspacesConfigPath
     ) -WorkingDirectory $smokeRoot
 
     Assert-DatabaseValue `
-        -Sql "SELECT count(*) FROM logs.pipeline_runs WHERE workspace_name = '$workspaceName' AND status = 'success';" `
+        -Sql "SELECT count(*) FROM logs.pipeline_runs WHERE workspace_name = '$runName' AND status = 'success';" `
         -Expected "1" `
         -Description "successful pipeline runs after first execution"
     Assert-DatabaseValue `
@@ -758,17 +786,17 @@ workspaces:
     Write-Step "Running the smoke workspace a second time to prove idempotency"
     Invoke-Checked -FilePath $smokeMetrka -ArgumentList @(
         "run",
-        $workspaceName,
+        $runName,
         "--workspaces-config-path",
         $workspacesConfigPath
     ) -WorkingDirectory $smokeRoot
 
     Assert-DatabaseValue `
-        -Sql "SELECT count(*) FROM logs.pipeline_runs WHERE workspace_name = '$workspaceName' AND status = 'success';" `
+        -Sql "SELECT count(*) FROM logs.pipeline_runs WHERE workspace_name = '$runName' AND status = 'success';" `
         -Expected "2" `
         -Description "successful pipeline runs after repeated execution"
     Assert-DatabaseValue `
-        -Sql "SELECT count(*) FROM logs.pipeline_runs WHERE workspace_name = '$workspaceName' AND status <> 'success';" `
+        -Sql "SELECT count(*) FROM logs.pipeline_runs WHERE workspace_name = '$runName' AND status <> 'success';" `
         -Expected "0" `
         -Description "non-successful pipeline runs"
     Assert-DatabaseValue `
@@ -789,71 +817,79 @@ workspaces:
         -Description "publications after repeated execution"
 
     if ($WorkspacePlacement -eq "managed") {
-        Assert-DefinitionRootClean -DefinitionRoot $definitionRoot
+        Assert-DefinitionRootClean -DefinitionRoot $datasetDefinitionRoot
     }
 
-    Write-Step "Exporting and verifying a customer workspace package"
-    Invoke-Checked -FilePath $smokeMetrka -ArgumentList @(
-        "workspace",
-        "export",
-        $workspaceName,
-        "--output",
-        $workspaceExportPath,
-        "--workspaces-config-path",
-        $workspacesConfigPath
-    ) -WorkingDirectory $smokeRoot
-    Assert-FileExists -Path $workspaceExportPath -Description "customer workspace export"
-    Invoke-Checked -FilePath $smokeMetrka -ArgumentList @(
-        "workspace",
-        "verify-export",
-        $workspaceExportPath
-    ) -WorkingDirectory $smokeRoot
+    # A customer package holds one flat workspace; a dataset folder's profiles,
+    # templates and glossary live in its source, outside the folder.
+    if ($WorkspaceLayout -eq "flat") {
+        Write-Step "Exporting and verifying a customer workspace package"
+        Invoke-Checked -FilePath $smokeMetrka -ArgumentList @(
+            "workspace",
+            "export",
+            $workspaceName,
+            "--output",
+            $workspaceExportPath,
+            "--workspaces-config-path",
+            $workspacesConfigPath
+        ) -WorkingDirectory $smokeRoot
+        Assert-FileExists -Path $workspaceExportPath -Description "customer workspace export"
+        Invoke-Checked -FilePath $smokeMetrka -ArgumentList @(
+            "workspace",
+            "verify-export",
+            $workspaceExportPath
+        ) -WorkingDirectory $smokeRoot
 
-    Write-Step "Reopening the customer export as an independent portable workspace"
-    Invoke-Checked -FilePath $smokeMetrka -ArgumentList @(
-        "workspace",
-        "import",
-        $workspaceExportPath,
-        "--destination-directory",
-        $roundTripRoot,
-        "--workspaces-config-path",
-        $roundTripConfigPath
-    ) -WorkingDirectory $smokeRoot
-    Assert-FileExists `
-        -Path (Join-Path $roundTripWorkspaceRoot "metrka-workspace-manifest.json") `
-        -Description "extracted customer workspace manifest"
+        Write-Step "Reopening the customer export as an independent portable workspace"
+        Invoke-Checked -FilePath $smokeMetrka -ArgumentList @(
+            "workspace",
+            "import",
+            $workspaceExportPath,
+            "--destination-directory",
+            $roundTripRoot,
+            "--workspaces-config-path",
+            $roundTripConfigPath
+        ) -WorkingDirectory $smokeRoot
+        Assert-FileExists `
+            -Path (Join-Path $roundTripWorkspaceRoot "metrka-workspace-manifest.json") `
+            -Description "extracted customer workspace manifest"
 
-    # The reopened workspace validates only if the export carried its template,
-    # profiles and glossary along with conf.
-    Invoke-Checked -FilePath $smokeMetrka -ArgumentList @(
-        "workspace",
-        "validate",
-        $workspaceName,
-        "--workspaces-config-path",
-        $roundTripConfigPath
-    ) -WorkingDirectory $smokeRoot
-    $roundTripProbeArguments = @(
-        $roundTripProbeScript,
-        $roundTripWorkspaceRoot,
-        "--workspace-name",
-        $workspaceName,
-        "--dataset-id",
-        $datasetId
-    )
-    foreach ($sourceRoot in @($definitionRoot, $dataRoot)) {
-        $roundTripProbeArguments += @("--forbidden-source-root", $sourceRoot)
+        # The reopened workspace validates only if the export carried its template,
+        # profiles and glossary along with conf.
+        Invoke-Checked -FilePath $smokeMetrka -ArgumentList @(
+            "workspace",
+            "validate",
+            $workspaceName,
+            "--workspaces-config-path",
+            $roundTripConfigPath
+        ) -WorkingDirectory $smokeRoot
+        $roundTripProbeArguments = @(
+            $roundTripProbeScript,
+            $roundTripWorkspaceRoot,
+            "--workspace-name",
+            $workspaceName,
+            "--dataset-id",
+            $datasetId
+        )
+        foreach ($sourceRoot in @($definitionRoot, $dataRoot)) {
+            $roundTripProbeArguments += @("--forbidden-source-root", $sourceRoot)
+        }
+        Invoke-Checked -FilePath $smokePython -ArgumentList $roundTripProbeArguments `
+            -WorkingDirectory $smokeRoot
     }
-    Invoke-Checked -FilePath $smokePython -ArgumentList $roundTripProbeArguments `
-        -WorkingDirectory $smokeRoot
+    else {
+        Write-Host "Skipped: customer export round trip (flat workspaces only)"
+    }
 
     if ($WorkspacePlacement -eq "managed") {
-        Assert-DefinitionRootClean -DefinitionRoot $definitionRoot
+        Assert-DefinitionRootClean -DefinitionRoot $datasetDefinitionRoot
     }
 
-    Write-Step "Installed end-to-end smoke passed (placement=$WorkspacePlacement)"
+    Write-Step "Installed end-to-end smoke passed (placement=$WorkspacePlacement, layout=$WorkspaceLayout)"
     Write-Host "Wheel:           $($wheel.FullName)"
     Write-Host "Publication:     $publicationId"
     Write-Host "Placement:       $WorkspacePlacement"
+    Write-Host "Layout:          $WorkspaceLayout"
     Write-Host "Core commit:     $coreCommit"
     $succeeded = $true
 }

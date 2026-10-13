@@ -32,8 +32,18 @@ with definitions and data on separate roots using:
 & .\release\installed_e2e_smoke\run-installed-e2e-smoke.ps1 -WorkspacePlacement managed
 ```
 
+`-WorkspaceLayout dataset_folders` runs the same workflow with the workspace as a
+source that keeps its dataset in its own folder, as production sources do. Combine it
+with either placement:
+
+```powershell
+& .\release\installed_e2e_smoke\run-installed-e2e-smoke.ps1 -WorkspacePlacement managed -WorkspaceLayout dataset_folders
+```
+
 Options:
 
+- `-WorkspacePlacement` is `portable` (default) or `managed`;
+- `-WorkspaceLayout` is `flat` (default) or `dataset_folders`;
 - `-PostgresImage` picks the PostgreSQL image, `postgres:17` by default;
 - `-KeepDatabase` leaves the container running for inspection and prints how to
   remove it;
@@ -59,6 +69,13 @@ Silver gets one `Unallocated` row; in 2025 they match.
 The script copies the workspace below `$env:TEMP` and commits the copy to a new Git
 repository, because every run records the revision of its workspace.
 
+With `-WorkspaceLayout dataset_folders` the copy becomes the source `smoke_counties`:
+`conf/` moves into its dataset folder `county_events/`, while the profiles, the
+template and the glossary stay beside it. The run, validation and publication then
+use the dataset ID `smoke_counties.county_events`, and a managed run keeps the data
+in `county_events/` under the source's `data_root`. The customer export round trip
+is skipped in this layout: a package holds one flat workspace.
+
 ## What is verified
 
 1. `metrka-core` is clean and on `main`.
@@ -82,7 +99,7 @@ repository, because every run records the revision of its workspace.
 12. A second run is idempotent: it creates another successful pipeline receipt but no
     additional marshaled file, Silver build, candidate, or publication.
 13. The customer workspace ZIP passes independent manifest, membership, path, size,
-    and checksum verification.
+    and checksum verification. Steps 13 to 15 run in the flat layout only.
 14. `metrka workspace import` verifies the ZIP again, extracts it below a new root,
     and registers the reopened portable workspace using only the installed CLI. The
     reopened workspace validates, so the export carried its template, profiles and
@@ -97,4 +114,4 @@ repository, because every run records the revision of its workspace.
     `logs` directory.
 
 Successful completion ends with `Installed end-to-end smoke passed` and the tested
-placement in parentheses.
+placement and layout in parentheses.

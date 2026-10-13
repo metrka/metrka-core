@@ -36,9 +36,6 @@ class WorkspaceLocation:
 
         object.__setattr__(self, "workspace_name", self.workspace_name.strip())
 
-        if self.dataset_folders and self.workspace_root is None:
-            raise ValueError("Only a portable workspace can keep its datasets in folders")
-
         if self.dataset_name is not None:
             if self.dataset_folders:
                 raise ValueError("A dataset folder cannot itself contain dataset folders")
@@ -106,12 +103,25 @@ class WorkspaceLocation:
         )
 
     def dataset_folder(self, dataset_name: str) -> WorkspaceLocation:
-        """Return the location of one dataset folder inside this source."""
+        """Return the location of one dataset folder inside this source.
 
-        if not self.dataset_folders or self.workspace_root is None:
+        A portable dataset folder keeps its data in its own ``data``; a managed one keeps
+        it in a folder of the same name under the source's ``data_root``.
+        """
+
+        if not self.dataset_folders:
             raise ValueError(f"Workspace {self.workspace_name!r} does not keep datasets in folders")
 
-        folder = self.workspace_root / require_dataset_folder_name(dataset_name)
+        folder = self.definition_root / require_dataset_folder_name(dataset_name)
+
+        if self.workspace_root is None:
+            return WorkspaceLocation(
+                workspace_name=self.workspace_name,
+                definition_root=folder,
+                data_root=self.data_root / dataset_name,
+                dataset_name=dataset_name,
+            )
+
         return WorkspaceLocation(
             workspace_name=self.workspace_name,
             workspace_root=folder,
@@ -133,21 +143,32 @@ class WorkspaceLocation:
     def glossary_path(self) -> Path:
         """The source's ``glossary.yaml``: beside its dataset folders, or beside ``conf``."""
 
-        if self.dataset_name is not None and self.workspace_root is not None:
-            return self.workspace_root.parent / "glossary.yaml"
+        if self.dataset_name is not None:
+            return self.definition_root.parent / "glossary.yaml"
 
         return self.definition_root / "glossary.yaml"
 
     @classmethod
     def managed(
-        cls, *, workspace_name: str, definition_root: Path, data_root: Path
+        cls,
+        *,
+        workspace_name: str,
+        definition_root: Path,
+        data_root: Path,
+        dataset_folders: bool = False,
     ) -> WorkspaceLocation:
-        """Create a layout whose definitions and data may live in separate stores."""
+        """Create a layout whose definitions and data may live in separate stores.
+
+        With ``dataset_folders``, the workspace is a source: each dataset's definitions
+        live in a subfolder of ``definition_root`` and its data in a subfolder of the
+        same name under ``data_root``.
+        """
 
         return cls(
             workspace_name=WorkspaceName(workspace_name),
             definition_root=definition_root,
             data_root=data_root,
+            dataset_folders=dataset_folders,
         )
 
     @property
