@@ -57,9 +57,10 @@ def save_table(
     )
 
     if table_format is TableFormat.CSV:
-
+        # pandas ends lines with os.linesep by default; a fixed "\n" makes the same
+        # table byte-identical whichever operating system builds it.
         def write_csv(temporary_path: Path) -> None:
-            df.to_csv(temporary_path, index=index, encoding="utf-8")
+            df.to_csv(temporary_path, index=index, encoding="utf-8", lineterminator="\n")
 
         atomic_write(out_path, write_csv)
 
