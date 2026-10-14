@@ -7,6 +7,16 @@ modules remain implementation details unless they are listed in
 `PUBLIC_API.md`.
 
 
+## [Unreleased]
+
+### Fixed
+
+- Silver CSV files end every line with `\n` on every operating system. Built on
+  Windows they ended lines with `\r\n`, so the same source capture gave CSV files
+  with different checksums on Windows and Linux; the data itself was the same.
+  Parquet files were not affected.
+
+
 ## [1.1.0] - 2026-10-14
 
 ### Configuration

@@ -49,6 +49,18 @@ def test_save_table_csv_creates_dirs(dummy_df: pd.DataFrame, tmp_path: Path) -> 
     assert read_back_df.iloc[0]["last_name"] == "Smith"
 
 
+def test_save_table_csv_ends_lines_with_newline_on_every_os(
+    dummy_df: pd.DataFrame, tmp_path: Path
+) -> None:
+    """The same table gives the same CSV bytes on Windows and Linux."""
+
+    returned_path = save_table(dummy_df, tmp_path / "people", fmt="csv")
+
+    content = returned_path.read_bytes()
+    assert b"\r" not in content
+    assert content == b"person_id,last_name,age\n123,Smith,45\n456,Doe,32\n"
+
+
 def test_save_table_parquet_enforces_extension(dummy_df: pd.DataFrame, tmp_path: Path) -> None:
 
     target_file = tmp_path / "inmates.wrong_ext"
