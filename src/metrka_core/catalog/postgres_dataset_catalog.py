@@ -7,18 +7,34 @@ import re
 from metrka_core.metadata.postgres import PostgresSession
 
 
-def _normalize_tag_slug(value: object) -> str:
-    """Normalize a contract tag into a stable slug."""
+def _contract_tag(value: object) -> tuple[str, str]:
+    """Return the stable slug and the display label of one contract tag."""
 
     if not isinstance(value, str) or not value.strip():
         raise ValueError("Silver contract meta.tags must contain non-empty strings")
 
-    tag_slug = re.sub(r"[^A-Za-z0-9]+", "-", value.strip()).strip("-")
+    tag_label = value.strip()
+    tag_slug = re.sub(r"[^A-Za-z0-9]+", "-", tag_label).strip("-")
 
     if not tag_slug:
         raise ValueError("Silver contract meta.tags must contain valid tag slugs")
 
-    return tag_slug
+    return tag_slug, tag_label
+
+
+def _contract_tags(tags: list[object]) -> list[tuple[str, str]]:
+    """Return the slug and label of each contract tag, in contract order.
+
+    Tags with the same slug are one catalog tag; the first keeps its place and label.
+    """
+
+    labels_by_slug: dict[str, str] = {}
+
+    for tag in tags:
+        tag_slug, tag_label = _contract_tag(tag)
+        labels_by_slug.setdefault(tag_slug, tag_label)
+
+    return list(labels_by_slug.items())
 
 
 class PostgresDatasetCatalogStore:
@@ -49,7 +65,7 @@ class PostgresDatasetCatalogStore:
         if not isinstance(tags, list):
             raise ValueError("Silver contract meta.tags must be a list")
 
-        tag_slugs = sorted({_normalize_tag_slug(tag) for tag in tags})
+        contract_tags = _contract_tags(tags)
 
         with self._session.transaction(), self._session.cursor() as cur:
             cur.execute(
@@ -114,7 +130,7 @@ class PostgresDatasetCatalogStore:
                 (dataset_id,),
             )
 
-            for tag_slug in tag_slugs:
+            for tag_position, (tag_slug, tag_label) in enumerate(contract_tags, start=1):
                 cur.execute(
                     """
                         INSERT INTO catalog.dataset_tags (
@@ -136,11 +152,15 @@ class PostgresDatasetCatalogStore:
                         INSERT INTO catalog.dataset_tag_memberships (
                             dataset_id,
                             tag_slug,
+                            tag_position,
+                            tag_label,
                             source,
                             contract_hash,
                             updated_at
                         )
                         VALUES (
+                            %s,
+                            %s,
                             %s,
                             %s,
                             'contract',
@@ -151,9 +171,11 @@ class PostgresDatasetCatalogStore:
                             dataset_id,
                             tag_slug
                         ) DO UPDATE SET
+                            tag_position = EXCLUDED.tag_position,
+                            tag_label = EXCLUDED.tag_label,
                             source = EXCLUDED.source,
                             contract_hash = EXCLUDED.contract_hash,
                             updated_at = now()
                         """,
-                    (dataset_id, tag_slug, contract_hash),
+                    (dataset_id, tag_slug, tag_position, tag_label, contract_hash),
                 )

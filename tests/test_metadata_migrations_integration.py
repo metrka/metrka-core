@@ -6,6 +6,7 @@ from uuid import uuid4
 import psycopg
 import pytest
 
+from metrka_core.catalog.postgres_dataset_catalog import PostgresDatasetCatalogStore
 from metrka_core.metadata.postgres import PostgresSession
 from metrka_core.metadata.schema_compatibility import inspect_metadata_schema
 from metrka_core.pipeline.acquisition.models import SourceCaptureAssetBinding
@@ -844,3 +845,113 @@ def test_source_capture_store_binds_multiple_paths_for_one_stream() -> None:
                 """,
                 (dataset_file_id,),
             )
+
+
+def test_dataset_tag_memberships_keep_a_position_and_label() -> None:
+    with psycopg.connect(_test_dsn()) as connection, connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT column_name, data_type, is_nullable
+            FROM information_schema.columns
+            WHERE table_schema = 'catalog'
+              AND table_name = 'dataset_tag_memberships'
+              AND column_name IN ('tag_position', 'tag_label')
+            ORDER BY column_name
+            """
+        )
+        columns = cursor.fetchall()
+
+        cursor.execute(
+            """
+            SELECT constraint_name, constraint_type
+            FROM information_schema.table_constraints
+            WHERE table_schema = 'catalog'
+              AND table_name = 'dataset_tag_memberships'
+              AND constraint_name IN (
+                    'dataset_tag_memberships_position_check',
+                    'dataset_tag_memberships_label_check',
+                    'dataset_tag_memberships_position_key'
+                  )
+            """
+        )
+        constraints = {
+            str(constraint_name): str(constraint_type)
+            for constraint_name, constraint_type in cursor.fetchall()
+        }
+
+    assert columns == [("tag_label", "text", "YES"), ("tag_position", "integer", "NO")]
+    assert constraints == {
+        "dataset_tag_memberships_position_check": "CHECK",
+        "dataset_tag_memberships_label_check": "CHECK",
+        "dataset_tag_memberships_position_key": "UNIQUE",
+    }
+
+
+def test_dataset_catalog_store_keeps_the_contract_order_of_tags() -> None:
+    suffix = uuid4().hex
+    dataset_id = f"tag_order_test.records_{suffix}"
+    crashes, florida, county = (
+        f"traffic crashes {suffix}",
+        f"florida {suffix}",
+        f"county {suffix}",
+    )
+
+    try:
+        with PostgresSession(_test_dsn(), assume_role="metrka_etl") as session:
+            store = PostgresDatasetCatalogStore(session)
+
+            store.register_dataset_catalog_from_contract(
+                dataset_id=dataset_id,
+                contract_hash="a" * 64,
+                contract={
+                    "meta": {"category": "health-medicine", "tags": [crashes, florida, county]}
+                },
+            )
+            first_contract_tags = _stored_tags(dataset_id)
+
+            # A changed contract replaces the order and drops the tags it no longer has.
+            store.register_dataset_catalog_from_contract(
+                dataset_id=dataset_id,
+                contract_hash="b" * 64,
+                contract={"meta": {"category": "health-medicine", "tags": [county, crashes]}},
+            )
+            second_contract_tags = _stored_tags(dataset_id)
+
+        assert first_contract_tags == [
+            (1, f"traffic-crashes-{suffix}", crashes),
+            (2, f"florida-{suffix}", florida),
+            (3, f"county-{suffix}", county),
+        ]
+        assert second_contract_tags == [
+            (1, f"county-{suffix}", county),
+            (2, f"traffic-crashes-{suffix}", crashes),
+        ]
+    finally:
+        with psycopg.connect(_test_dsn()) as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM catalog.dataset_tag_memberships WHERE dataset_id = %s", (dataset_id,)
+            )
+            cursor.execute(
+                "DELETE FROM catalog.dataset_category_memberships WHERE dataset_id = %s",
+                (dataset_id,),
+            )
+            cursor.execute(
+                "DELETE FROM catalog.dataset_tags WHERE tag_slug LIKE %s", (f"%-{suffix}",)
+            )
+
+
+def _stored_tags(dataset_id: str) -> list[tuple[int, str, str]]:
+    with psycopg.connect(_test_dsn()) as connection, connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT tag_position, tag_slug, tag_label
+            FROM catalog.dataset_tag_memberships
+            WHERE dataset_id = %s
+            ORDER BY tag_position
+            """,
+            (dataset_id,),
+        )
+        return [
+            (int(tag_position), str(tag_slug), str(tag_label))
+            for tag_position, tag_slug, tag_label in cursor.fetchall()
+        ]
