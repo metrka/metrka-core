@@ -9,6 +9,18 @@ modules remain implementation details unless they are listed in
 
 ## [Unreleased]
 
+### Catalog
+
+- The catalog keeps a dataset's tags in the order its contract lists them, with
+  the text the contract wrote: `catalog.dataset_tag_memberships` has
+  `tag_position` and `tag_label`. Until now the tags were kept as a set and read
+  back alphabetically by slug. Tags that give one slug are still one tag; the
+  first keeps its place and text.
+- Metadata migration `0002_dataset_tag_positions` adds the two columns. Run
+  `python -m metrka_core.metadata.migrations upgrade` before the pipeline. Tags
+  already in the catalog keep their alphabetical order and have no label until
+  the dataset's next Silver build writes its contract order.
+
 ### Fixed
 
 - Silver CSV files end every line with `\n` on every operating system. Built on
