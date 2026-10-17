@@ -301,3 +301,42 @@ def test_a_dataset_folder_uses_a_profile_from_its_source(tmp_path: Path) -> None
     )
 
     assert result.silver_table_names == ("records",)
+
+
+def _grouped_main(outputs: dict[str, str]) -> dict[str, Any]:
+    """Two kinds of source file, sorted by their name into one Bronze file each."""
+
+    main = _main_yaml(
+        filename_metadata={
+            "regex": r"^records_(?P<kind>[a-z]+)_(?P<year>[0-9]{4})[.]xlsx$",
+            "columns": {
+                "reporting_year": {"from_group": "year", "type": "integer"},
+                "kind": {"from_group": "kind"},
+            },
+            "member_key": ["kind", "reporting_year"],
+        },
+        bronze_assembly={"strategy": "xlsx_rows", "group_files_by": "kind", "outputs": outputs},
+    )
+    main["streams"][STREAM]["silver"]["temporal_coverage"]["table"] = "records"
+    return main
+
+
+def test_grouped_outputs_each_feed_their_table(tmp_path: Path) -> None:
+    _validate(
+        tmp_path,
+        main=_grouped_main({"crude": "records.csv", "adjusted": "records_adjusted.csv"}),
+        tables={"records": RECORDS_TABLE, "records_adjusted": RECORDS_TABLE},
+    )
+
+
+def test_grouped_outputs_and_tables_must_pair_up(tmp_path: Path) -> None:
+    with pytest.raises(RuntimeError) as raised:
+        _validate(
+            tmp_path,
+            main=_grouped_main({"crude": "records.csv", "adjusted": "adjusted.csv"}),
+            tables={"records": RECORDS_TABLE, "records_adjusted": RECORDS_TABLE},
+        )
+
+    message = str(raised.value)
+    assert "Bronze file 'adjusted.csv' (bronze_assembly.outputs['adjusted']) feeds no" in message
+    assert "contract table 'records_adjusted' gets no Bronze file" in message

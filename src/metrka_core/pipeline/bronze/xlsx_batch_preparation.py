@@ -14,14 +14,18 @@ from metrka_core.pipeline.bronze.source_batch_fingerprint import (
 )
 from metrka_core.pipeline.bronze.xlsx_row_assembly import (
     BronzeAssemblyConfig,
-    write_assembled_xlsx_csv,
+    write_assembled_xlsx_csvs,
 )
 from metrka_core.pipeline.models import LandedAsset
 
 
 @dataclass(frozen=True, slots=True)
 class PreparedXlsxSourceBatch:
-    """One assembled XLSX source batch ready for Bronze registration."""
+    """One assembled XLSX source batch ready for Bronze registration.
+
+    ``output_paths`` holds one Bronze CSV, or one per group when the assembly groups files.
+    ``row_count`` is their total and ``column_count`` the widest of them.
+    """
 
     stream_name: str
     input_paths: tuple[Path, ...]
@@ -30,7 +34,7 @@ class PreparedXlsxSourceBatch:
     artifact_role: ArtifactRole
     source_last_modified: datetime | None
     fingerprint: SourceBatchFingerprint
-    output_path: Path
+    output_paths: tuple[Path, ...]
     input_file_count: int
     row_count: int
     column_count: int
@@ -65,13 +69,11 @@ def prepare_xlsx_source_batch(
 
     fingerprint = fingerprint_source_batch(input_paths)
 
-    output_path = output_dir / assembly_config.output_filename
-
-    assembly_result = write_assembled_xlsx_csv(
+    assembly_results = write_assembled_xlsx_csvs(
         paths=input_paths,
-        output_path=output_path,
+        output_dir=output_dir,
         filename_config=filename_config,
-        read_config=assembly_config.read_config,
+        assembly_config=assembly_config,
     )
 
     source_last_modified_values = [
@@ -90,8 +92,8 @@ def prepare_xlsx_source_batch(
         artifact_role=ordered_assets[0].artifact_role,
         source_last_modified=source_last_modified,
         fingerprint=fingerprint,
-        output_path=assembly_result.output_path,
-        input_file_count=assembly_result.input_file_count,
-        row_count=assembly_result.row_count,
-        column_count=assembly_result.column_count,
+        output_paths=tuple(result.output_path for result in assembly_results),
+        input_file_count=sum(result.input_file_count for result in assembly_results),
+        row_count=sum(result.row_count for result in assembly_results),
+        column_count=max(result.column_count for result in assembly_results),
     )

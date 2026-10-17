@@ -9,6 +9,29 @@ modules remain implementation details unless they are listed in
 
 ## [Unreleased]
 
+### Bronze
+
+- A stream's XLSX files can be sorted, whole, into several Bronze CSVs by one
+  filename metadata value: `bronze_assembly.group_files_by` names the column and
+  `outputs` maps each value to its CSV, for example
+  `{crude: lung_cancer_incidence.csv, age_adjusted: lung_cancer_incidence_age_adjusted.csv}`.
+  Each CSV feeds the contract table named like it, so one dataset can publish
+  tables of different shapes from one stream, as a ZIP stream already could. No
+  row is split. A file whose value no output names, an output that gets no file,
+  and differing columns within one output are errors, and nothing is written
+  when any group fails. Without `group_files_by` assembly is unchanged.
+- validate checks that every grouped output feeds a contract table and every
+  table gets an output.
+
+### Silver
+
+- `parent_child_reconciliation.missing_child_values: allow` reconciles a source
+  that leaves small counts blank. Such rows stay as given, the counts shown are
+  summed, and the residual row holds what the rows do not show. A group with no
+  value at all, the parent row included, stays as given with no residual. The
+  default, `fail`, still stops a build on a missing child value. The
+  reconciliation evidence records `missing_child_count`.
+
 ### Catalog
 
 - The catalog keeps a dataset's tags in the order its contract lists them, with

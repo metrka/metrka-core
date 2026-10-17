@@ -401,6 +401,7 @@ def _validate_parent_child_reconciliation(
         "residual",
         "remove_parent",
         "negative_difference",
+        "missing_child_values",
     }
     unknown_keys = sorted(set(config) - allowed_keys)
 
@@ -515,4 +516,12 @@ def _validate_parent_child_reconciliation(
     if negative_difference != "fail":
         raise ContractValidationError(
             f"{table_name}: parent_child_reconciliation.negative_difference must be 'fail'"
+        )
+
+    missing_child_values = config.get("missing_child_values", "fail")
+
+    if missing_child_values not in {"fail", "allow"}:
+        raise ContractValidationError(
+            f"{table_name}: parent_child_reconciliation.missing_child_values must be "
+            "'fail' or 'allow'"
         )

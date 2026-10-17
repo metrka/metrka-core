@@ -190,16 +190,19 @@ def _persist_xlsx_asset_batch(
     )
 
     bronze_artifacts = capture_bronze_artifacts(
-        bronze_run_dir=bronze_run_dir, output_paths=[prepared.output_path]
+        bronze_run_dir=bronze_run_dir, output_paths=list(prepared.output_paths)
     )
 
-    quality_output_file = QualityOutputFile(
-        local_path=prepared.output_path,
-        workspace_relative_path=deps.bronze_store.relative_path(prepared.output_path),
+    quality_output_files = tuple(
+        QualityOutputFile(
+            local_path=output_path,
+            workspace_relative_path=deps.bronze_store.relative_path(output_path),
+        )
+        for output_path in prepared.output_paths
     )
 
     post_quality = check_bronze_output(
-        BronzeOutput(files=(quality_output_file,)), ids=quality_ids, store=deps.quality_checks
+        BronzeOutput(files=quality_output_files), ids=quality_ids, store=deps.quality_checks
     )
 
     _raise_if_quality_failed("XLSX batch post-checks", post_quality)
@@ -222,7 +225,7 @@ def _persist_xlsx_asset_batch(
     logger.info(
         "Assembled %d XLSX files into %s with %d rows",
         prepared.input_file_count,
-        prepared.output_path.name,
+        ", ".join(path.name for path in prepared.output_paths),
         prepared.row_count,
     )
 
@@ -284,11 +287,11 @@ def _ingest_xlsx_asset_batch(
         if prepared is not None:
             finish_meta = finish_meta.merged_with(
                 ExecutionStepMeta(
-                    source_file_name=prepared.output_path.name,
+                    source_file_name=", ".join(path.name for path in prepared.output_paths),
                     output_row_count=prepared.row_count,
                     output_column_count=prepared.column_count,
-                    output_file_count=1,
-                    output_byte_count=prepared.output_path.stat().st_size,
+                    output_file_count=len(prepared.output_paths),
+                    output_byte_count=sum(path.stat().st_size for path in prepared.output_paths),
                     extra={"source_batch_hash": (prepared.fingerprint.sha256)},
                 )
             )

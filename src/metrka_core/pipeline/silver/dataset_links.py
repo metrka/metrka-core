@@ -102,20 +102,44 @@ def validate_dataset_links(
 def _bronze_file_problems(
     *, where: str, stream: StreamConfig, table_keys: Collection[str]
 ) -> list[str]:
-    # Only an assembled stream names its Bronze file before the run.
-    if stream.bronze_assembly is None or len(table_keys) == 1:
+    # Only an assembled stream names its Bronze files before the run.
+    assembly = stream.bronze_assembly
+
+    if assembly is None:
         return []
 
-    file_name = stream.bronze_assembly.output_filename
+    if assembly.group_files_by is None:
+        if len(table_keys) == 1:
+            return []
 
-    if Path(file_name).stem in table_keys:
-        return []
+        (file_name,) = assembly.output_filenames
 
-    return [
-        f"{where}: Bronze file {file_name!r} (bronze_assembly.output_filename) feeds no contract "
-        f"table; contract tables: {sorted(table_keys)}. Name the table "
-        f"{Path(file_name).stem!r} or set output_filename to '<table>.csv'."
+        if Path(file_name).stem in table_keys:
+            return []
+
+        return [
+            f"{where}: Bronze file {file_name!r} (bronze_assembly.output_filename) feeds no "
+            f"contract table; contract tables: {sorted(table_keys)}. Name the table "
+            f"{Path(file_name).stem!r} or set output_filename to '<table>.csv'."
+        ]
+
+    # A grouped assembly writes one file per value; each must feed a table and each table
+    # must be fed, because a one-file shortcut cannot apply.
+    problems = [
+        f"{where}: Bronze file {file_name!r} (bronze_assembly.outputs[{value!r}]) feeds no "
+        f"contract table; contract tables: {sorted(table_keys)}. Name a table "
+        f"{Path(file_name).stem!r} or change the output to '<table>.csv'."
+        for value, file_name in assembly.outputs
+        if Path(file_name).stem not in table_keys
     ]
+    fed = {Path(file_name).stem for file_name in assembly.output_filenames}
+    problems += [
+        f"{where}: contract table {table_key!r} gets no Bronze file; bronze_assembly.outputs "
+        f"writes {sorted(assembly.output_filenames)}."
+        for table_key in sorted(table_keys)
+        if table_key not in fed
+    ]
+    return problems
 
 
 def _bronze_columns(stream: StreamConfig, tables: Mapping[str, Any]) -> set[str]:

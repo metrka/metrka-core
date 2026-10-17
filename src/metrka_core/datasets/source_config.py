@@ -159,7 +159,46 @@ def _load_filename_metadata(
         ) from error
 
 
-def _load_bronze_assembly(raw: Any, *, path: Path, stream_name: str) -> BronzeAssemblyConfig | None:
+def _load_grouped_outputs(
+    raw: Any, *, path: Path, stream_name: str, filename_metadata: FilenameMetadataConfig | None
+) -> tuple[str, tuple[tuple[str, str], ...]]:
+    """Read ``group_files_by`` and ``outputs``: one Bronze CSV per filename metadata value."""
+    group_files_by = raw.get("group_files_by")
+    outputs = raw.get("outputs")
+    where = f"{path}: stream {stream_name} bronze_assembly"
+
+    if not isinstance(group_files_by, str) or not group_files_by.strip():
+        raise RuntimeError(f"{where} group_files_by must name a filename metadata column")
+
+    if filename_metadata is None or group_files_by not in filename_metadata.columns:
+        known = sorted(filename_metadata.columns) if filename_metadata is not None else []
+        raise RuntimeError(
+            f"{where} group_files_by {group_files_by!r} is not a filename_metadata column: {known}"
+        )
+
+    if "output_filename" in raw:
+        raise RuntimeError(f"{where} sets output_filename or group_files_by, not both")
+
+    if not isinstance(outputs, dict) or not outputs:
+        raise RuntimeError(
+            f"{where} group_files_by needs outputs: a mapping of each {group_files_by} "
+            "value to its Bronze CSV, e.g. {crude: <table>.csv}"
+        )
+
+    pairs: list[tuple[str, str]] = []
+
+    for value, filename in outputs.items():
+        if not isinstance(filename, str):
+            raise RuntimeError(f"{where} outputs[{value!r}] must be a CSV filename")
+
+        pairs.append((str(value), filename))
+
+    return group_files_by, tuple(pairs)
+
+
+def _load_bronze_assembly(
+    raw: Any, *, path: Path, stream_name: str, filename_metadata: FilenameMetadataConfig | None
+) -> BronzeAssemblyConfig | None:
     if raw is None:
         return None
 
@@ -173,12 +212,21 @@ def _load_bronze_assembly(raw: Any, *, path: Path, stream_name: str) -> BronzeAs
             f"{path}: stream {stream_name} has unsupported bronze assembly strategy: {strategy!r}"
         )
 
-    output_filename = raw.get("output_filename", f"{stream_name}.csv")
+    output_filename: str | None = None
+    group_files_by: str | None = None
+    outputs: tuple[tuple[str, str], ...] = ()
 
-    if not isinstance(output_filename, str):
-        raise RuntimeError(
-            f"{path}: stream {stream_name} bronze_assembly output_filename must be a string"
+    if "group_files_by" in raw or "outputs" in raw:
+        group_files_by, outputs = _load_grouped_outputs(
+            raw, path=path, stream_name=stream_name, filename_metadata=filename_metadata
         )
+    else:
+        output_filename = raw.get("output_filename", f"{stream_name}.csv")
+
+        if not isinstance(output_filename, str):
+            raise RuntimeError(
+                f"{path}: stream {stream_name} bronze_assembly output_filename must be a string"
+            )
 
     sheet_name = raw.get("sheet_name", 0)
     header_row = raw.get("header_row", 0)
@@ -215,6 +263,8 @@ def _load_bronze_assembly(raw: Any, *, path: Path, stream_name: str) -> BronzeAs
                 drop_fully_empty_rows=drop_empty_rows,
                 drop_fully_empty_columns=drop_empty_columns,
             ),
+            group_files_by=group_files_by,
+            outputs=outputs,
         )
     except ValueError as error:
         raise RuntimeError(
@@ -276,7 +326,10 @@ def load_source_config(path: str | Path, *, expected_ws_name: str | None = None)
         )
 
         bronze_assembly = _load_bronze_assembly(
-            stream_raw.get("bronze_assembly"), path=path, stream_name=stream_name
+            stream_raw.get("bronze_assembly"),
+            path=path,
+            stream_name=stream_name,
+            filename_metadata=filename_metadata,
         )
 
         known_keys = {

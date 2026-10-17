@@ -68,8 +68,8 @@ def test_prepares_one_bronze_batch_from_multiple_xlsx_files(tmp_path: Path) -> N
     assert result.input_file_count == 2
     assert result.row_count == 2
     assert result.column_count == 4
-    assert result.output_path == tmp_path / "bronze-run" / "county.csv"
-    assert result.output_path.is_file()
+    assert result.output_paths == (tmp_path / "bronze-run" / "county.csv",)
+    assert result.output_paths[0].is_file()
 
     assert tuple(member.filename for member in result.fingerprint.members) == (
         "cid0321__single-year__default__all__2002.xlsx",

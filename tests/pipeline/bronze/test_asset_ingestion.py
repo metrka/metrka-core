@@ -254,3 +254,93 @@ def test_persists_multiple_xlsx_assets_as_one_bronze_file(tmp_path: Path) -> Non
     assert finished_event.meta.output_file_count == 1
     assert finished_event.meta.output_row_count == 2
     assert finished_event.meta.output_column_count == 4
+
+
+def test_persists_a_grouped_xlsx_batch_as_one_file_per_value(tmp_path: Path) -> None:
+    crude = tmp_path / "cid0446__single-year__crude__white__2023.xlsx"
+    adjusted = tmp_path / "cid0446__single-year__age_adjusted__white__2023.xlsx"
+
+    pd.DataFrame([{"County": "Florida", "Count": 10, "Denom": 100, "Rate": 1.0}]).to_excel(
+        crude, index=False
+    )
+    pd.DataFrame([{"County": "Florida", "Count": 10, "Rate": 0.9}]).to_excel(adjusted, index=False)
+
+    filename_metadata = FilenameMetadataConfig(
+        regex=(
+            r"^cid(?P<cid_id>[0-9]+)__(?P<year_breakdown>[^_]+)__"
+            r"(?P<rate_type>crude|age_adjusted)__(?P<group>[a-z]+)__(?P<year>[0-9]{4})\.xlsx$"
+        ),
+        columns={
+            "reporting_year": FilenameMetadataColumn(from_group="year", value_type="integer"),
+            "rate_type": FilenameMetadataColumn(from_group="rate_type", value_type="string"),
+        },
+        member_key=("rate_type", "reporting_year"),
+    )
+
+    source_config = SourceConfig(
+        workspace_name="fl_healthcharts",
+        streams={
+            "lung": StreamConfig(
+                name="lung",
+                official_filename="cid0446__*.xlsx",
+                filename_metadata=filename_metadata,
+                bronze_assembly=BronzeAssemblyConfig(
+                    strategy="xlsx_rows",
+                    output_filename=None,
+                    read_config=XlsxReadConfig(),
+                    group_files_by="rate_type",
+                    outputs=(("crude", "lung.csv"), ("age_adjusted", "lung_age_adjusted.csv")),
+                ),
+            )
+        },
+    )
+
+    bronze_store = LocalBronzeArtifactStore(
+        workspace_root=tmp_path,
+        bronze_root=tmp_path / "data" / "files" / "bronze",
+        current_root=tmp_path / "data" / "current",
+    )
+
+    deps = MagicMock()
+    deps.source_config = source_config
+    deps.bronze_store = bronze_store
+    deps.bronze_run_ids.new_bronze_run_id.return_value = "bronze-run-1"
+    deps.dataset_file_ids.new_dataset_file_id.return_value = "dataset-file-1"
+    deps.clock.now_utc.return_value = datetime(2026, 10, 17, 12, 0, tzinfo=UTC)
+    deps.marshal.get_by_hash.return_value = None
+
+    runtime = MagicMock()
+    runtime.dataset_name = "fl_healthcharts"
+    runtime.pipeline_run_id = "pipeline-1"
+
+    result = ingest_landed_assets(
+        runtime=runtime,
+        deps=deps,
+        assets=[
+            LandedAsset(
+                stream_name="lung",
+                path=path,
+                source_url="https://example.test/indicator",
+                source_capture_id="capture-1",
+            )
+            for path in (crude, adjusted)
+        ],
+    )
+
+    run_dir = bronze_store.run_dir(run_id="bronze-run-1")
+
+    # One batch, one record, two Bronze files: one per rate type, each with its own columns.
+    assert sorted(path.name for path in run_dir.iterdir() if path.is_file()) == [
+        "lung.csv",
+        "lung_age_adjusted.csv",
+    ]
+    assert "Denom" in pd.read_csv(run_dir / "lung.csv").columns
+    assert "Denom" not in pd.read_csv(run_dir / "lung_age_adjusted.csv").columns
+    assert result.by_stream["lung"].dataset_file_id == "dataset-file-1"
+
+    registered = deps.marshal.register.call_args.args[0]
+    assert registered.source_file_name == "lung.csv, lung_age_adjusted.csv"
+    assert registered.row_count_raw == 2
+
+    artifacts = deps.marshal.record_bronze_artifacts.call_args.args[1]
+    assert len(artifacts) == 2
