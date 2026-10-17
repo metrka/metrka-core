@@ -25,6 +25,10 @@ modules remain implementation details unless they are listed in
 
 ### Silver
 
+- An `int` cast accepts a whole number written with a decimal point, such as
+  `30.0`: Bronze writes that form for an XLSX count column that has blank cells,
+  because such a column is read as floating point. A value with a fractional
+  part, such as `30.5`, still fails the build.
 - `parent_child_reconciliation.missing_child_values: allow` reconciles a source
   that leaves small counts blank. Such rows stay as given, the counts shown are
   summed, and the residual row holds what the rows do not show. A group with no
@@ -46,6 +50,10 @@ modules remain implementation details unless they are listed in
 
 ### Fixed
 
+- The residual row of a parent-child reconciliation (for example `Unallocated`)
+  keeps the table's column types. A column it left empty, such as population or
+  rate, became object dtype, and the Silver build stopped with "ambiguous object
+  dtype". No published dataset had a residual row yet.
 - Silver CSV files end every line with `\n` on every operating system. Built on
   Windows they ended lines with `\r\n`, so the same source capture gave CSV files
   with different checksums on Windows and Linux; the data itself was the same.

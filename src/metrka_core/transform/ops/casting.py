@@ -88,6 +88,37 @@ def _cast_decimal_value(value: Any, *, precision: int, scale: int) -> Decimal | 
     return quantized_value
 
 
+def _whole_number(value: Any) -> int | None:
+    """Read one value as a whole number; ``30``, ``30.0`` and ``3E1`` are 30, ``30.5`` is not."""
+
+    if pd.isna(value):
+        return None
+
+    try:
+        decimal_value = Decimal(str(value).strip())
+    except (InvalidOperation, ValueError) as exc:
+        raise ValueError(f"Value {value!r} is not a valid integer") from exc
+
+    if not decimal_value.is_finite() or decimal_value != decimal_value.to_integral_value():
+        raise ValueError(f"Value {value!r} is not a whole number")
+
+    return int(decimal_value)
+
+
+def _cast_int_series(series: pd.Series) -> pd.Series:
+    """Cast to nullable Int64, accepting whole numbers written with a decimal point.
+
+    A source column with blank cells is read as floating point and written as ``30.0``;
+    that is still the whole number 30. A value with a fractional part fails.
+    """
+
+    try:
+        return series.astype("Int64")
+    except (TypeError, ValueError):
+        values = [_whole_number(value) for value in series.tolist()]
+        return pd.Series(pd.array(values, dtype="Int64"), index=series.index)
+
+
 def normalize_missing(df: pd.DataFrame) -> TransformationResult:
     """Replace blank or whitespace-only strings with missing values."""
 
@@ -157,7 +188,7 @@ def cast_columns(df: pd.DataFrame, casts: dict[str, Any]) -> TransformationResul
                 df[col] = df[col].astype("boolean")
 
             elif typ == SilverCastType.INT:
-                df[col] = df[col].astype("Int64")
+                df[col] = _cast_int_series(df[col])
 
             elif typ == SilverCastType.FLOAT:
                 df[col] = pd.to_numeric(df[col], errors="raise").astype("Float64")

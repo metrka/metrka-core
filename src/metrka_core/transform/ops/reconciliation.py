@@ -168,7 +168,12 @@ def reconcile_parent_child_rows(
             residual_row[label_column] = label_value
             residual_row[measure_column] = difference
 
-            output_frames.append(pd.DataFrame([residual_row], columns=source.columns))
+            # Give the residual row the table's column types: a column it leaves empty
+            # would otherwise turn the whole column into object dtype.
+            residual_frame = pd.DataFrame([residual_row], columns=source.columns).astype(
+                source.dtypes.to_dict()
+            )
+            output_frames.append(residual_frame)
             derived_row_count = 1
 
         evidence.append(

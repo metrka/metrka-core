@@ -260,3 +260,22 @@ def test_a_missing_parent_with_shown_children_still_fails() -> None:
 
     with pytest.raises(ValueError, match="parent total must not be missing"):
         reconcile_parent_child_rows(source, config)
+
+
+def test_residual_row_keeps_the_column_types() -> None:
+    import pyarrow as pa
+
+    source = _table(florida=35, alachua=10, baker=20)
+    source["population"] = pd.Series([300, 100, 200], dtype="Int64")
+    source["rate"] = pd.Series(
+        ["11.7", "10.0", "10.0"], dtype=pd.ArrowDtype(pa.decimal128(12, 1))
+    ).astype(pd.ArrowDtype(pa.decimal128(12, 1)))
+
+    result = reconcile_parent_child_rows(source, CONFIG)
+
+    # The Unallocated row leaves population and rate empty; their types must survive.
+    assert result.data["geography_name"].tolist()[-1] == "Unallocated"
+    assert str(result.data["population"].dtype) == "Int64"
+    assert str(result.data["rate"].dtype) == "decimal128(12, 1)[pyarrow]"
+    assert str(result.data["licensed_bed_count"].dtype) == "Int64"
+    assert pd.isna(result.data["population"].tolist()[-1])
