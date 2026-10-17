@@ -43,7 +43,13 @@ def _require_columns(table: pd.DataFrame, *, columns: set[str]) -> None:
 def reconcile_parent_child_rows(
     table: pd.DataFrame, config: Mapping[str, Any]
 ) -> TransformationResult:
-    """Remove parent rows and add residual rows when child totals are lower."""
+    """Remove parent rows and add residual rows when child totals are lower.
+
+    A child row with a missing measure fails the reconciliation, unless the contract sets
+    ``missing_child_values: allow`` for a source that leaves small counts blank. Then the
+    row stays as it is, the shown values are summed, and the residual row holds what the
+    children do not show.
+    """
 
     group_by = list(config["group_by"])
     parent_config = config["parent"]
@@ -55,6 +61,7 @@ def reconcile_parent_child_rows(
     label_column = str(residual_config["label_column"])
     label_value = residual_config["label_value"]
     remove_parent = config["remove_parent"]
+    allow_missing_children = config.get("missing_child_values", "fail") == "allow"
 
     _require_columns(table, columns={*group_by, parent_column, measure_column, label_column})
 
@@ -90,12 +97,49 @@ def reconcile_parent_child_rows(
         parent_total = parent_rows.iloc[0][measure_column]
 
         if pd.isna(parent_total):
-            raise ValueError("Parent-child reconciliation parent total must not be missing")
+            # A source may publish a group with no values at all, parent included: there is
+            # nothing to reconcile, so the rows stay as given and no residual is derived.
+            if not (allow_missing_children and child_rows[measure_column].isna().all()):
+                raise ValueError("Parent-child reconciliation parent total must not be missing")
 
-        if child_rows[measure_column].isna().any():
+            output_frames.append(child_rows if remove_parent else group)
+            evidence.append(
+                AutomaticColumnEvidence(
+                    operation="parent_child_reconciliation",
+                    kind=TransformationEvidenceKind.PARENT_CHILD_RECONCILIATION,
+                    status=TransformationEvidenceStatus.NO_CHANGE,
+                    column_name=measure_column,
+                    affected_row_count=0,
+                    reason=(
+                        f"The {parent_column} = {_plain_scalar(parent_value)} row and every "
+                        "other row of the group have no value, so there was nothing to compare."
+                    ),
+                    metrics={
+                        "parent": {"column": parent_column, "value": _plain_scalar(parent_value)},
+                        "residual": {"column": label_column, "value": _plain_scalar(label_value)},
+                        "group": {
+                            column: _plain_scalar(parent_rows.iloc[0][column])
+                            for column in group_by
+                        },
+                        "parent_total": None,
+                        "child_total": None,
+                        "difference": None,
+                        "parent_row_count": 1,
+                        "child_row_count": len(child_rows),
+                        "missing_child_count": len(child_rows),
+                        "derived_row_count": 0,
+                        "parent_removed": remove_parent,
+                    },
+                )
+            )
+            continue
+
+        missing_child_count = int(child_rows[measure_column].isna().sum())
+
+        if missing_child_count and not allow_missing_children:
             raise ValueError("Parent-child reconciliation child totals must not be missing")
 
-        child_total = child_rows[measure_column].sum()
+        child_total = child_rows[measure_column].sum(skipna=True)
         difference = parent_total - child_total
 
         group_values = {column: _plain_scalar(parent_rows.iloc[0][column]) for column in group_by}
@@ -152,6 +196,7 @@ def reconcile_parent_child_rows(
                     "difference": _plain_scalar(difference),
                     "parent_row_count": 1,
                     "child_row_count": len(child_rows),
+                    "missing_child_count": missing_child_count,
                     "derived_row_count": derived_row_count,
                     "parent_removed": remove_parent,
                 },

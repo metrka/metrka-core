@@ -23,6 +23,15 @@ modules remain implementation details unless they are listed in
 - validate checks that every grouped output feeds a contract table and every
   table gets an output.
 
+### Silver
+
+- `parent_child_reconciliation.missing_child_values: allow` reconciles a source
+  that leaves small counts blank. Such rows stay as given, the counts shown are
+  summed, and the residual row holds what the rows do not show. A group with no
+  value at all, the parent row included, stays as given with no residual. The
+  default, `fail`, still stops a build on a missing child value. The
+  reconciliation evidence records `missing_child_count`.
+
 ### Catalog
 
 - The catalog keeps a dataset's tags in the order its contract lists them, with
