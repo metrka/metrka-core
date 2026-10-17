@@ -1,0 +1,29 @@
+meta:
+  uses: smoke_source
+  version: "1.0"
+  title: Smoke County Events
+  info: >-
+    Made-up [[event|events]] by county and year, published by the installed
+    release smoke test.
+
+  tags:
+    - smoke test
+
+  methodology:
+    counts: "[[event|Events]] per county and year."
+    rules:
+      parent_child_reconciliation:
+        affects:
+          - geography_name
+          - event_count
+
+tables:
+  county_events:
+    uses: county_events
+    display_name: Smoke County Events by County
+    info: Annual county counts of made-up events.
+    columns:
+      Count:
+        rename_to: event_count
+        meta:
+          description: Number of [[event|events]].

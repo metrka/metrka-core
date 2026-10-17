@@ -1,0 +1,77 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Packaging / build
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Test / tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local env / secrets
+.env
+.env.*
+*.local
+
+# Logs
+*.log
+
+# Jupyter
+.ipynb_checkpoints/
+
+# If you generate this tree file locally, don’t commit it (optional)
+metrka-core_tree.txt
+workspaces.local.yaml
+# Temporary locks created next to workspace placement registries.
+*.yaml.lock
+*.yml.lock
+
+# Local metadata database connection config
+metadata.local.yaml
+
+# Local documentation and scratch work
+**/_docs/
+**/_scratch/
+
+
+/ssh
+/ssh.pub
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+db.local.yaml
+workspaces.local.yaml
+*.local.yaml
+
+# Generated immediately before a production wheel build.
+src/metrka_core/_build_provenance.json
+/metrka-core.code-workspace

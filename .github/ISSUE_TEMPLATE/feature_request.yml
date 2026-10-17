@@ -1,0 +1,47 @@
+name: Feature request
+description: Suggest a reusable capability for metrka-core.
+title: "feat: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What problem should this feature solve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: example
+    attributes:
+      label: Example
+      description: Show how the API, CLI command, contract, or configuration could look.
+
+
+  - type: dropdown
+    id: proposed_scope
+    attributes:
+      label: Module
+      description: Where do you think this capability belongs?
+      options:
+        - Generic metrka-core functionality
+        - Public extension protocol
+        - Dataset-specific implementation
+        - Private advanced extension
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: Define the steps needed to implement it.
+
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: 

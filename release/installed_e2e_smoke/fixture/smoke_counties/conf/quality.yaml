@@ -1,0 +1,8 @@
+version: 1
+tables:
+  county_events:
+    unique: [geography_name, reporting_year]
+    columns:
+      geography_name: [not_null, {forbidden: [Statewide]}]
+      event_count:    [not_null, {min: 0}]
+      reporting_year: [not_null, {between: [2000, current_year]}]

@@ -1,0 +1,11 @@
+# Meta profile: what every dataset of the smoke source says about itself.
+
+version: 1
+
+meta:
+  category: health-medicine
+
+  source:
+    name: Metrka installed smoke test
+    publisher: Metrka
+    update_frequency: static snapshot

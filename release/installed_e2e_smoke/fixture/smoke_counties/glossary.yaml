@@ -1,0 +1,3 @@
+version: 1
+terms:
+  event: A made-up occurrence counted by the installed release smoke test.
