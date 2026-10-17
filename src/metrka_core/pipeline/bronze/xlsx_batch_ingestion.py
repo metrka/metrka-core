@@ -19,7 +19,8 @@ def build_xlsx_batch_marshaled_file(
     if len(prepared.source_urls) != 1:
         raise ValueError("XLSX source batch must have exactly one source URL")
 
-    source_file_name = prepared.output_path.name
+    # A grouped assembly writes several CSVs; the record names them all.
+    source_file_name = ", ".join(path.name for path in prepared.output_paths)
 
     return MarshaledFile(
         dataset_file_id=dataset_file_id,
