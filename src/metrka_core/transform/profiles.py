@@ -7,6 +7,7 @@ A table profile gives a table's structure, and the methodology that structure br
 
     version: 1
     renamable: [Count, Rate]
+    retypable: [Denom]
     table:
       columns: {...}
       canonical_order: [...]
@@ -19,8 +20,11 @@ A contract table names it with ``uses: <name>``. The contract may then change th
 name (``rename_to``) to a column the profile lists as ``renamable``, so a count can read
 ``licensed_bed_count`` in one dataset and ``children_tested_count`` in another while
 shared keys such as the county keep one name everywhere. A new name replaces the old one
-wherever the profile refers to it. Everything else comes from the profile, so every table
-of one profile is built the same way; a different shape is a different profile.
+wherever the profile refers to it. A column the profile lists as ``retypable`` may also
+take its own type (``cast_to``), for a source that gives one indicator's values in a finer
+type than the rest, such as a population it does not round. Everything else comes from
+the profile, so every table of one profile is built the same way, except in the types its
+profile marks retypable; a different shape is a different profile.
 
 A meta profile gives what every dataset of a source says about itself::
 
@@ -56,7 +60,7 @@ import yaml
 PROFILE_DIRECTORY = "profiles"
 
 _PROFILE_NAME = re.compile(r"[a-z][a-z0-9_]*")
-_PROFILE_FIELDS = frozenset({"version", "renamable", "table", "methodology", "meta"})
+_PROFILE_FIELDS = frozenset({"version", "renamable", "retypable", "table", "methodology", "meta"})
 # What a contract table may set beside ``uses``; the structure is the profile's.
 _TABLE_WORDS = frozenset({"uses", "display_name", "info", "columns"})
 # The one list that collects sentences from every profile instead of being replaced.
@@ -76,6 +80,8 @@ class _Profile:
     meta: dict[str, Any] | None = None
     # Source columns whose published name a contract may choose.
     renamable: frozenset[str] = frozenset()
+    # Source columns whose type a contract may choose.
+    retypable: frozenset[str] = frozenset()
 
 
 def uses_profiles(contract: Mapping[str, Any]) -> bool:
@@ -238,14 +244,16 @@ def _load_profile(name: str, *, contract_path: Path) -> _Profile:
     ):
         raise ProfileError(f"{path}: a profile cannot use another profile")
 
-    renamable = document.get("renamable", [])
-    if not isinstance(renamable, list) or not all(isinstance(item, str) for item in renamable):
-        raise ProfileError(f"{path}: 'renamable' must list source columns")
-
     columns = table["columns"] if isinstance(table, Mapping) else {}
-    unknown = sorted(set(renamable) - set(columns))
-    if unknown:
-        raise ProfileError(f"{path}: renamable columns {unknown} are not in the table")
+    freed: dict[str, list[str]] = {}
+    for word in ("renamable", "retypable"):
+        listed = document.get(word, [])
+        if not isinstance(listed, list) or not all(isinstance(item, str) for item in listed):
+            raise ProfileError(f"{path}: '{word}' must list source columns")
+        unknown = sorted(set(listed) - set(columns))
+        if unknown:
+            raise ProfileError(f"{path}: {word} columns {unknown} are not in the table")
+        freed[word] = listed
 
     return _Profile(
         name=name,
@@ -253,7 +261,8 @@ def _load_profile(name: str, *, contract_path: Path) -> _Profile:
         table=dict(table) if isinstance(table, Mapping) else None,
         methodology=dict(methodology),
         meta=dict(meta) if isinstance(meta, Mapping) else None,
-        renamable=frozenset(renamable),
+        renamable=frozenset(freed["renamable"]),
+        retypable=frozenset(freed["retypable"]),
     )
 
 
@@ -284,7 +293,7 @@ def _merge(base: Any, over: Any, path: tuple[str, ...] = ()) -> Any:
 def _apply_contract(
     profile: _Profile, table: Mapping[str, Any], *, where: str, problems: list[str]
 ) -> dict[str, Any] | None:
-    """Lay a contract table's words and new names over its profile; refuse other changes."""
+    """Lay a contract table's words, new names and new types over its profile; refuse the rest."""
 
     if profile.table is None:
         raise ProfileError(f"{where}: profile {profile.name!r} has no 'table'")
@@ -314,7 +323,11 @@ def _apply_contract(
             problems.append(f"{where}: column {source_column!r} is not in profile {profile.name!r}")
             continue
 
-        allowed = {"meta", "rename_to"} if source_column in profile.renamable else {"meta"}
+        allowed = {"meta"}
+        if source_column in profile.renamable:
+            allowed.add("rename_to")
+        if source_column in profile.retypable:
+            allowed.add("cast_to")
         if not isinstance(column, Mapping) or set(column) - allowed:
             problems.append(
                 f"{where}: column {source_column!r} may set only {sorted(allowed)}; "
@@ -337,6 +350,13 @@ def _apply_contract(
                 continue
             renamed[str(profile_column["rename_to"])] = new_name
             profile_column["rename_to"] = new_name
+
+        new_type = column.get("cast_to")
+        if new_type is not None:
+            if not isinstance(new_type, str) or not new_type.strip():
+                problems.append(f"{where}: column {source_column!r} cast_to must be a type")
+                continue
+            profile_column["cast_to"] = new_type
 
         profile_columns[source_column] = profile_column
 
