@@ -223,6 +223,87 @@ def test_a_profile_can_only_free_its_own_columns(tmp_path: Path) -> None:
         validate_contract_file(contract_path)
 
 
+COUNTY_DENOMINATOR = {
+    "version": 1,
+    "retypable": ["Denom"],
+    "table": {
+        "columns": {
+            "County": {"rename_to": "geography_name", "cast_to": "string"},
+            "Denom": {
+                "rename_to": "population_denominator",
+                "cast_to": "int",
+                "meta": {"description": "Estimated population."},
+            },
+        },
+        "canonical_order": ["geography_name", "population_denominator"],
+    },
+}
+
+
+def test_a_retypable_column_takes_its_type_in_the_contract(tmp_path: Path) -> None:
+    contract_path = _source(
+        tmp_path,
+        {"uses": "county_count", "columns": {"Denom": {"cast_to": "float"}}},
+        profile=COUNTY_DENOMINATOR,
+    )
+
+    table = validate_contract_file(contract_path)["tables"]["beds"]
+
+    assert table["columns"]["Denom"] == {
+        "rename_to": "population_denominator",
+        "cast_to": "float",
+        "meta": {"description": "Estimated population."},
+    }
+
+    source = pd.DataFrame({"County": ["Broward", "Calhoun"], "Denom": ["955986.000000001", "8817"]})
+    built = apply_transformation(source, load_table_cfg(contract_path, table_key="beds"))
+    assert str(built.data["population_denominator"].dtype) == "Float64"
+    assert built.data["population_denominator"].tolist() == [955986.000000001, 8817.0]
+
+
+def test_a_retypable_column_keeps_the_profile_type_unless_the_contract_names_one(
+    tmp_path: Path,
+) -> None:
+    contract_path = _source(tmp_path, {"uses": "county_count"}, profile=COUNTY_DENOMINATOR)
+
+    table = validate_contract_file(contract_path)["tables"]["beds"]
+
+    assert table["columns"]["Denom"]["cast_to"] == "int"
+
+
+def test_a_column_the_profile_does_not_free_keeps_its_type(tmp_path: Path) -> None:
+    contract_path = _source(
+        tmp_path,
+        {"uses": "county_count", "columns": {"County": {"cast_to": "int"}}},
+        profile=COUNTY_DENOMINATOR,
+    )
+
+    with pytest.raises(ContractValidationError, match=r"column 'County' may set only \['meta'\]"):
+        validate_contract_file(contract_path)
+
+
+def test_a_renamable_column_does_not_take_a_type(tmp_path: Path) -> None:
+    contract_path = _source(
+        tmp_path,
+        {"uses": "county_count", "columns": {"Count": {"cast_to": "float"}}},
+        profile=COUNTY_RATE,
+    )
+
+    with pytest.raises(
+        ContractValidationError, match=r"column 'Count' may set only \['meta', 'rename_to'\]"
+    ):
+        validate_contract_file(contract_path)
+
+
+def test_a_profile_can_only_free_the_type_of_its_own_columns(tmp_path: Path) -> None:
+    contract_path = _source(
+        tmp_path, {"uses": "county_count"}, profile={**COUNTY_DENOMINATOR, "retypable": ["Rate"]}
+    )
+
+    with pytest.raises(ContractValidationError, match=r"retypable columns \['Rate'\] are not in"):
+        validate_contract_file(contract_path)
+
+
 CHARTS_SOURCE = {
     "version": 1,
     "meta": {
