@@ -6,7 +6,7 @@
 
 
 [![Commits](https://img.shields.io/github/commit-activity/t/metrka/metrka-core?label=commits)](https://github.com/metrka/metrka-core/commits/main)
-[![Commits since release](https://img.shields.io/github/commits-since/metrka/metrka-core/latest?sort=semver&label=since%20release)](https://github.com/metrka/metrka-core/compare/v1.0.0...main)
+[![Commits since release](https://img.shields.io/github/commits-since/metrka/metrka-core/latest?sort=semver&label=since%20release)](https://github.com/metrka/metrka-core/compare/v1.1.0...main)
 [![Code size](https://img.shields.io/github/languages/code-size/metrka/metrka-core?label=code%20size)](https://github.com/metrka/metrka-core)
 [![Contributors](https://img.shields.io/github/contributors/metrka/metrka-core)](https://github.com/metrka/metrka-core/graphs/contributors)
 [![Last commit](https://img.shields.io/github/last-commit/metrka/metrka-core?label=last%20commit)](https://github.com/metrka/metrka-core/commits/main)
