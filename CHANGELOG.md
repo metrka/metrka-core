@@ -7,6 +7,17 @@ modules remain implementation details unless they are listed in
 `PUBLIC_API.md`.
 
 
+## [1.1.0] - 2026-10-27
+
+### Configuration
+
+- A table profile may list source columns as `retypable`; a contract table
+  that uses the profile may then set `cast_to` on those columns. Other columns
+  keep the profile's type, and every retypable column must be in the profile's
+  table. Contracts written for 1.0.0 work unchanged; a profile with
+  `retypable` is refused by 1.0.0.
+
+
 ## [1.0.0] - 2026-10-18
 
 First release.
