@@ -175,8 +175,8 @@ def parse_pipeline_spec(raw: dict[str, Any]) -> PipelineSpec:
 
     steps_raw = raw.get("steps")
 
-    if not isinstance(steps_raw, list) or not steps_raw:
-        raise RuntimeError("pipeline.steps must be a non-empty list")
+    if not isinstance(steps_raw, list):
+        raise RuntimeError("pipeline.steps must be a list (use [] for acquisition only)")
 
     steps: list[PipelineStepSpec] = []
 

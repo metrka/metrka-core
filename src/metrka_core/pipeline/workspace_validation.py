@@ -22,7 +22,7 @@ from metrka_core.pipeline.default_registry import create_core_registry
 from metrka_core.pipeline.models import parse_pipeline_spec
 from metrka_core.pipeline.registry import PipelineRegistry
 from metrka_core.pipeline.silver.dataset_links import validate_dataset_links
-from metrka_core.pipeline.silver.task_factory import load_silver_contracts
+from metrka_core.pipeline.silver.task_factory import load_silver_contracts, runs_silver
 from metrka_core.quality.config import load_quality_config, validate_quality_config
 from metrka_core.storage.config_store import LocalConfigStore
 from metrka_core.storage.workspace_layout import WorkspaceLayout
@@ -124,7 +124,9 @@ def validate_workspace(
     quality_config_path = config_store.path(name=quality_settings.config)
     quality_config = load_quality_config(quality_config_path)
     contracts = load_silver_contracts(source_config=source_config, config_store=config_store)
-    validate_quality_config(quality_config, contracts.values())
+    # Table rules check Silver output; without a Silver step there is nothing to check them against.
+    if runs_silver(source_config):
+        validate_quality_config(quality_config, contracts.values())
     validate_dataset_links(
         source_config=source_config, config_store=config_store, contracts=contracts
     )

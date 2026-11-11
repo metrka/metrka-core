@@ -16,7 +16,7 @@ from metrka_core.datasets.source_config import (
 from metrka_core.pipeline.config import parse_quality_settings
 from metrka_core.pipeline.runtime_services import Clock, SourceCaptureIdGenerator
 from metrka_core.pipeline.silver.dataset_links import validate_dataset_links
-from metrka_core.pipeline.silver.task_factory import load_silver_contracts
+from metrka_core.pipeline.silver.task_factory import load_silver_contracts, runs_silver
 from metrka_core.quality.config import QualityConfig, load_quality_config, validate_quality_config
 from metrka_core.storage.bronze_store import BronzeArtifactStore, LocalBronzeArtifactStore
 from metrka_core.storage.config_store import ConfigStore, LocalConfigStore
@@ -109,7 +109,10 @@ def build_workspace_composition(
     quality_config = load_quality_config(config_store.path(name=quality_settings.config))
 
     contracts = load_silver_contracts(source_config=source_config, config_store=config_store)
-    validate_quality_config(quality_config, contracts.values())
+    # Table rules check Silver output, so a pipeline without a Silver step has nothing for
+    # them to check and no contracts to check them against.
+    if runs_silver(source_config):
+        validate_quality_config(quality_config, contracts.values())
     validate_dataset_links(
         source_config=source_config, config_store=config_store, contracts=contracts
     )
