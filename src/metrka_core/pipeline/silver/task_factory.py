@@ -171,14 +171,20 @@ def build_silver_tasks(*, source_config: SourceConfig) -> list[SilverTaskConfig]
     return tasks
 
 
+def runs_silver(source_config: SourceConfig) -> bool:
+    """Whether the workspace pipeline has a Silver step."""
+
+    pipeline = parse_pipeline_spec(source_config.pipeline)
+
+    return any(step.action == "silver.process" for step in pipeline.steps)
+
+
 def load_silver_contracts(
     *, source_config: SourceConfig, config_store: ConfigStore
 ) -> dict[Path, dict[str, Any]]:
     """Validate and load every contract the Silver step will use, keyed by path."""
 
-    pipeline = parse_pipeline_spec(source_config.pipeline)
-
-    if not any(step.action == "silver.process" for step in pipeline.steps):
+    if not runs_silver(source_config):
         return {}
 
     contracts: dict[Path, dict[str, Any]] = {}

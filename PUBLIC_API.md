@@ -94,7 +94,7 @@ requires the corresponding compatibility decision for the package version.
 | `load_contract` | Contract read | Reads one contract file with its table and meta profiles applied, as validation, Silver builds and published snapshots see it. Raises `ProfileError` when a profile is missing or a contract changes what its profile fixes. |
 | `open_pipeline_context` | Advanced execution | Opens the PostgreSQL-backed composition and lifecycle context for one pipeline run and closes it on exit. |
 | `parse_dataset_id` | Dataset identity | Splits `<workspace_name>.<stream_name>` at the last dot, the one rule every Metrka reader must use instead of parsing identifiers itself. |
-| `run_pipeline` | Pipeline operation | Runs acquisition and all configured actions for one workspace and returns `PipelineRunResult`. |
+| `run_pipeline` | Pipeline operation | Runs acquisition and all configured actions for one workspace and returns `PipelineRunResult`. An explicit `pipeline.steps: []` runs acquisition only, including the source-capture receipt and metadata registration. |
 | `validate_workspace` | Workspace operation | Validates static workspace configuration without PostgreSQL, acquisition, action execution, or runtime writes. |
 | `verify_workspace_export` | Workspace operation | Verifies manifest structure, safe membership, sizes, and checksums without extracting the package. |
 

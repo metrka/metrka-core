@@ -97,6 +97,29 @@ def test_validate_workspace_checks_contracts_when_silver_is_enabled(tmp_path: Pa
         )
 
 
+def test_validate_workspace_leaves_table_rules_for_silver_when_silver_is_off(
+    tmp_path: Path,
+) -> None:
+    """A Bronze-only run keeps the quality.yaml written for the Silver table it will build later."""
+
+    initialized = initialize_workspace(
+        "example_dataset",
+        download_url="https://example.org/source.csv",
+        workspaces_config_path=tmp_path / "workspaces.local.yaml",
+        workspace_root=tmp_path / "datasets" / "example_dataset",
+    )
+    initialized.quality_config_path.write_text(
+        "version: 1\ntables:\n  data:\n    columns:\n      year: [not_null]\n", encoding="utf-8"
+    )
+
+    result = validate_workspace(
+        "example_dataset", workspaces_config_path=initialized.workspaces_config_path
+    )
+
+    assert result.pipeline_actions == ("bronze.ingest",)
+    assert result.silver_contract_count == 0
+
+
 def _snapshot(root: Path) -> dict[str, bytes | None]:
     return {
         path.relative_to(root).as_posix(): path.read_bytes() if path.is_file() else None
