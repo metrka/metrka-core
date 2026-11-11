@@ -344,11 +344,12 @@ def _validate_normalize_values_rules(table_name: str, columns: dict[str, Any]) -
 
             after_value = replacement_rule["replace_with"]
 
-            if not isinstance(after_value, supported_value_types):
+            # null publishes the value as missing, such as "Suppressed" in a count column.
+            if after_value is not None and not isinstance(after_value, supported_value_types):
                 raise ContractValidationError(
                     f"{table_name}.{source_column}."
                     f"{before_value}: replace_with must "
-                    "be a scalar value"
+                    "be a scalar value or null"
                 )
 
             if before_value == after_value:
