@@ -245,6 +245,43 @@ def test_validate_workspace_requires_the_stream_to_match_the_folder(tmp_path: Pa
         validate_workspace("fl.beds", workspaces_config_path=_source_registry(tmp_path))
 
 
+def _add_stream(folder: Path, name: str, **settings: str) -> None:
+    path = folder / "conf" / "main.yaml"
+    main = yaml.safe_load(path.read_text(encoding="utf-8"))
+    main["streams"][name] = {
+        "official_filename": f"{name}.json",
+        "download_url": f"https://example.org/{name}.json",
+        **settings,
+    }
+    path.write_text(yaml.safe_dump(main, sort_keys=False), encoding="utf-8")
+
+
+def test_validate_workspace_accepts_documentation_beside_the_data(tmp_path: Path) -> None:
+    _add_stream(_dataset_folder(tmp_path), "beds_metadata", artifact_role="documentation")
+
+    result = validate_workspace("fl.beds", workspaces_config_path=_source_registry(tmp_path))
+
+    assert result.stream_names == ("beds", "beds_metadata")
+
+
+def test_validate_workspace_refuses_a_second_data_stream(tmp_path: Path) -> None:
+    _add_stream(_dataset_folder(tmp_path), "more_beds")
+
+    with pytest.raises(RuntimeError, match="other streams need artifact_role: documentation"):
+        validate_workspace("fl.beds", workspaces_config_path=_source_registry(tmp_path))
+
+
+def test_validate_workspace_refuses_documentation_as_the_folder_stream(tmp_path: Path) -> None:
+    folder = _dataset_folder(tmp_path)
+    path = folder / "conf" / "main.yaml"
+    main = yaml.safe_load(path.read_text(encoding="utf-8"))
+    main["streams"]["beds"]["artifact_role"] = "documentation"
+    path.write_text(yaml.safe_dump(main, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="cannot have artifact_role: documentation"):
+        validate_workspace("fl.beds", workspaces_config_path=_source_registry(tmp_path))
+
+
 def test_validate_workspace_requires_the_source_workspace_name(tmp_path: Path) -> None:
     _dataset_folder(tmp_path, workspace_name="fl_beds")
 

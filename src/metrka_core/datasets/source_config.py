@@ -377,10 +377,27 @@ def load_source_config(path: str | Path, *, expected_ws_name: str | None = None)
 
 
 def require_dataset_folder_streams(source_config: SourceConfig, *, dataset_name: str) -> None:
-    """A dataset folder defines exactly one stream, named like the folder."""
+    """A dataset folder defines one stream named like the folder for its data.
 
-    if list(source_config.streams) != [dataset_name]:
+    Beside it the folder may keep streams with ``artifact_role: documentation``, such as the
+    source's own description of the file, captured with every download.
+    """
+
+    other_streams = [
+        name
+        for name, stream in source_config.streams.items()
+        if name != dataset_name and stream.artifact_role != "documentation"
+    ]
+
+    if dataset_name not in source_config.streams or other_streams:
         raise RuntimeError(
             f"Dataset folder {dataset_name!r} must define exactly one stream named "
-            f"{dataset_name!r}; found {sorted(source_config.streams)}"
+            f"{dataset_name!r} for its data; other streams need artifact_role: documentation. "
+            f"Found {sorted(source_config.streams)}"
+        )
+
+    if source_config.streams[dataset_name].artifact_role == "documentation":
+        raise RuntimeError(
+            f"Dataset folder {dataset_name!r} stream {dataset_name!r} holds the data; "
+            "it cannot have artifact_role: documentation"
         )
