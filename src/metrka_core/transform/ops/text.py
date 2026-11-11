@@ -194,7 +194,8 @@ def normalize_values(
                     f"normalize_values requires a non-empty reason for {column_name}.{before_value}"
                 )
 
-            df.loc[mask, column_name] = after_value
+            # replace_with: null publishes the value as missing.
+            df.loc[mask, column_name] = pd.NA if after_value is None else after_value
 
             evidence.append(
                 TransformationObservation(
