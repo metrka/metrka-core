@@ -10,6 +10,8 @@ from typing import Any
 import yaml
 from psycopg.conninfo import make_conninfo
 
+from metrka_core.utils.yaml_loading import safe_load
+
 logger = logging.getLogger(__name__)
 
 
@@ -18,7 +20,7 @@ def _conninfo_from_yaml(config_path: Path) -> str:
         raise RuntimeError(f"Metadata database config does not exist: {config_path}")
 
     try:
-        raw: Any = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+        raw: Any = safe_load(config_path.read_text(encoding="utf-8"))
     except yaml.YAMLError as exc:
         raise RuntimeError(f"Invalid YAML in {config_path}") from exc
 

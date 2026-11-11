@@ -12,6 +12,7 @@ import yaml
 
 from metrka_core.datasets.dataset_identity import parse_dataset_id
 from metrka_core.datasets.workspace_location import WorkspaceLocation, WorkspacePlacement
+from metrka_core.utils.yaml_loading import safe_load
 
 WORKSPACE_CONFIG_SCHEMA_VERSION: Final = 1
 DATASET_FOLDERS_LAYOUT: Final = "dataset_folders"
@@ -22,7 +23,7 @@ def _load_yaml_mapping(path: Path) -> dict[str, object]:
         raise RuntimeError(f"Missing workspace configuration file: {path}")
 
     try:
-        loaded = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        loaded = safe_load(path.read_text(encoding="utf-8")) or {}
     except yaml.YAMLError as error:
         raise RuntimeError(f"Invalid YAML in {path}") from error
 
