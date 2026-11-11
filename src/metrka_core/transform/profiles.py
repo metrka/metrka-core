@@ -57,6 +57,8 @@ from typing import Any
 
 import yaml
 
+from metrka_core.utils.yaml_loading import safe_load
+
 PROFILE_DIRECTORY = "profiles"
 
 _PROFILE_NAME = re.compile(r"[a-z][a-z0-9_]*")
@@ -160,7 +162,7 @@ def expand_profiles(contract: dict[str, Any], *, contract_path: Path) -> dict[st
 def load_contract(path: Path) -> dict[str, Any]:
     """Read a contract file and expand its profiles."""
 
-    contract = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    contract = safe_load(path.read_text(encoding="utf-8")) or {}
     if not isinstance(contract, dict):
         raise ProfileError(f"{path}: top-level YAML must be a mapping")
 
@@ -208,7 +210,7 @@ def _load_profile(name: str, *, contract_path: Path) -> _Profile:
         raise ProfileError(f"profile {name!r} was not found; looked in {looked}")
 
     try:
-        document = yaml.safe_load(path.read_text(encoding="utf-8"))
+        document = safe_load(path.read_text(encoding="utf-8"))
     except yaml.YAMLError as error:
         raise ProfileError(f"{path}: YAML parse error: {error}") from error
 

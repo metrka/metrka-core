@@ -17,6 +17,7 @@ import yaml
 from metrka_core.transform.cast_types import SILVER_CAST_TYPE_NAMES, is_date_like_cast_type
 from metrka_core.transform.ops.casting import parse_decimal_cast_type
 from metrka_core.transform.profiles import ProfileError, expand_profiles
+from metrka_core.utils.yaml_loading import safe_load
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +87,7 @@ def _validate_contract_loads(path: Path) -> dict[str, Any]:
 
     try:
         with path.open("r", encoding="utf-8") as f:
-            data = yaml.safe_load(f)
+            data = safe_load(f)
     except yaml.YAMLError as e:
         raise ContractValidationError(f"{path}: YAML parse error: {e}") from e
 

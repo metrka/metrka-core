@@ -17,6 +17,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from metrka_core.transform.profiles import expand_profiles
+from metrka_core.utils.yaml_loading import safe_load
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +83,7 @@ def load_yaml(cfg_path: str | Path) -> dict[str, Any]:
 
     try:
         with cfg_path.open("r", encoding="utf-8") as f:
-            data = yaml.safe_load(f)
+            data = safe_load(f)
     except FileNotFoundError:
         logger.error("failed: file not found path = %s", cfg_path, exc_info=True)
         raise

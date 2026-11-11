@@ -42,6 +42,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 from metrka_core.quality.models import QualitySeverity
 from metrka_core.transform.ops.casting import parse_decimal_cast_type
+from metrka_core.utils.yaml_loading import safe_load
 
 FLAG_RULES = frozenset({"not_null", "is_null", "unique"})
 VALUE_RULES = frozenset({"min", "max", "between", "allowed", "forbidden", "pattern"})
@@ -128,7 +129,7 @@ def load_quality_config(path: Path) -> QualityConfig:
         raise FileNotFoundError(f"Quality config does not exist: {path}")
 
     try:
-        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+        raw = safe_load(path.read_text(encoding="utf-8"))
     except yaml.YAMLError as exc:
         raise ValueError(f"Invalid quality YAML: {path}") from exc
 

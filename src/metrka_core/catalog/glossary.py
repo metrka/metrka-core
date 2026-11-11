@@ -24,6 +24,7 @@ from typing import Any
 import yaml
 
 from metrka_core.transform.profiles import expand_profiles, uses_profiles
+from metrka_core.utils.yaml_loading import safe_load
 
 GLOSSARY_FILE_NAME = "glossary.yaml"
 
@@ -152,7 +153,7 @@ def load_glossary(path: Path) -> Glossary:
         return Glossary()
 
     try:
-        document = yaml.safe_load(path.read_text(encoding="utf-8"))
+        document = safe_load(path.read_text(encoding="utf-8"))
     except yaml.YAMLError as error:
         raise ValueError(f"{path}: YAML parse error: {error}") from error
 
@@ -187,7 +188,7 @@ def published_contract_bytes(contract_path: Path, glossary: Glossary) -> bytes:
     """
 
     source = contract_path.read_bytes()
-    written = yaml.safe_load(source) or {}
+    written = safe_load(source) or {}
     contract = expand_profiles(written, contract_path=contract_path)
     if uses_profiles(written):
         source = yaml.safe_dump(contract, sort_keys=False, allow_unicode=True, width=1000).encode(

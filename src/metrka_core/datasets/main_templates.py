@@ -46,6 +46,8 @@ from typing import Any
 
 import yaml
 
+from metrka_core.utils.yaml_loading import safe_load
+
 TEMPLATE_DIRECTORY = "templates"
 FOLDER_INPUT = "folder"
 
@@ -66,7 +68,7 @@ def load_main_config(path: str | Path) -> dict[str, Any]:
     """Read a workspace's main.yaml, filled in from its template when it names one."""
 
     path = Path(path)
-    document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    document = safe_load(path.read_text(encoding="utf-8")) or {}
 
     if not isinstance(document, dict):
         raise MainTemplateError(f"{path}: top-level YAML must be a mapping")
@@ -155,7 +157,7 @@ def _load_template(
         raise MainTemplateError(f"{main_path}: template {name!r} was not found; looked in {looked}")
 
     try:
-        document = yaml.safe_load(path.read_text(encoding="utf-8"))
+        document = safe_load(path.read_text(encoding="utf-8"))
     except yaml.YAMLError as error:
         raise MainTemplateError(f"{path}: YAML parse error: {error}") from error
 
