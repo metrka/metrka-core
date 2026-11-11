@@ -81,6 +81,7 @@ def _ingest(
     marshal_store: MarshalStore,
     execution_store: MagicMock,
     quality_store: MagicMock | None = None,
+    ignored_json_keys: tuple[str, ...] = (),
 ):
     resolved_quality_store = quality_store if quality_store is not None else MagicMock()
 
@@ -98,7 +99,50 @@ def _ingest(
         quality_store=resolved_quality_store,
         file_marshal_store=marshal_store,  # type: ignore[arg-type]
         pipeline_run_id="pipeline-1",
+        ignored_json_keys=ignored_json_keys,
     )
+
+
+def test_ignored_json_keys_find_the_earlier_copy_and_keep_the_file_as_received(
+    tmp_path: Path,
+) -> None:
+    first_source = tmp_path / "first" / "about.json"
+    second_source = tmp_path / "second" / "about.json"
+    changed_source = tmp_path / "changed" / "about.json"
+
+    for path, document in (
+        (first_source, {"name": "Beds, 2023", "viewCount": 29}),
+        (second_source, {"viewCount": 31, "name": "Beds, 2023"}),
+        (changed_source, {"name": "Beds, 2023, revised", "viewCount": 31}),
+    ):
+        path.parent.mkdir()
+        path.write_text(json.dumps(document), encoding="utf-8")
+
+    store = MarshalStore()
+    bronze_store = _bronze_store(tmp_path)
+    results = [
+        _ingest(
+            source=source,
+            bronze_store=bronze_store,
+            marshal_store=store,
+            execution_store=MagicMock(),
+            ignored_json_keys=("viewCount",),
+        )
+        for source in (first_source, second_source, changed_source)
+    ]
+    first, second, changed = results
+
+    assert first is not None and second is not None and changed is not None
+    assert first.is_new and not second.is_new and changed.is_new
+    assert second.dataset_file_id == first.dataset_file_id
+    assert len(store.entries) == 2
+
+    entry = store.entries[first.dataset_file_id]
+    bronze_file = bronze_store.run_dir(run_id=first.bronze_run_id or "") / "about.json"
+
+    assert bronze_file.read_bytes() == first_source.read_bytes()
+    assert entry.bronze_artifacts[0].sha256 == hashlib.sha256(bronze_file.read_bytes()).hexdigest()
+    assert entry.file.source_hash != entry.bronze_artifacts[0].sha256
 
 
 def test_flat_file_quality_evidence_uses_workspace_relative_paths(tmp_path: Path) -> None:

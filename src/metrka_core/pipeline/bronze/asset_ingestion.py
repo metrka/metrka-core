@@ -407,6 +407,7 @@ def ingest_landed_assets(
                 artifact_role=asset.artifact_role,
                 source_last_modified=asset.source_last_modified,
                 pipeline_run_id=runtime.pipeline_run_id,
+                ignored_json_keys=stream.ignored_json_keys,
             )
 
             if single_result is None:

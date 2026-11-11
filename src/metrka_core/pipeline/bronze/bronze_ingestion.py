@@ -30,6 +30,7 @@ from metrka_core.metadata.postgres_file_marshal import PostgresFileMarshalStore
 from metrka_core.observability.execution_step_meta import ExecutionStepMeta
 from metrka_core.observability.execution_step_scope import run_step
 from metrka_core.observability.stores import ExecutionLogStore
+from metrka_core.pipeline.bronze.comparison_hash import sha256_json_ignoring
 from metrka_core.pipeline.bronze.models import BronzeIngestResult
 from metrka_core.pipeline.bronze.unpack_zip import ZipExtractResult, secure_extract_zip
 from metrka_core.pipeline.runtime_services import (
@@ -83,12 +84,16 @@ def ingest_to_bronze(
     source_capture_id: str | None = None,
     source_last_modified: datetime | None = None,
     pipeline_run_id: str | None = None,
+    ignored_json_keys: tuple[str, ...] = (),
 ) -> BronzeIngestResult | None:
     """
     Register and stage a landed file in Bronze.
 
     Returns the new or existing FileMarshal identity.
     Returns None only when the landed physical file does not exist.
+
+    With ``ignored_json_keys`` the file's source hash, which finds an earlier copy of the same
+    file, leaves those keys out; the file is still kept and verified byte for byte.
     """
 
     if not landed_file.exists() or not landed_file.is_file():
@@ -130,6 +135,11 @@ def ingest_to_bronze(
         # ----------------------------------------------------------------
         content_hash = sha256_file(landed_file)
         size_bytes = landed_file.stat().st_size
+        source_hash = (
+            sha256_json_ignoring(landed_file, ignored_json_keys)
+            if ignored_json_keys
+            else content_hash
+        )
 
         m_file = MarshaledFile(
             dataset_file_id=(dataset_file_ids.new_dataset_file_id()),
@@ -138,7 +148,7 @@ def ingest_to_bronze(
             source_file_name=landed_file.name,
             original_source_file_name=original_source_file_name,
             artifact_role=artifact_role,
-            source_hash=content_hash,
+            source_hash=source_hash,
             file_size=size_bytes,
             ingestion_timestamp=clock.now_utc(),
             source_last_modified=source_last_modified,
@@ -179,6 +189,12 @@ def ingest_to_bronze(
                     "size": size_bytes,
                 }
             }
+
+            if ignored_json_keys:
+                fingerprint_meta[landed_file.name]["comparison_sha256"] = source_hash
+                fingerprint_meta[landed_file.name]["ignored_json_keys"] = ", ".join(
+                    ignored_json_keys
+                )
 
         # ----------------------------------------------------------------
         # 3. Landing → Bronze pre-quality gate

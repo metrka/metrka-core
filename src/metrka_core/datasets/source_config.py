@@ -34,6 +34,8 @@ class StreamConfig:
     artifact_role: ArtifactRole = "data"
     filename_metadata: FilenameMetadataConfig | None = None
     bronze_assembly: BronzeAssemblyConfig | None = None
+    # JSON keys left out of the hash that finds an earlier copy of the file (duplicate_check).
+    ignored_json_keys: tuple[str, ...] = ()
     extra: dict[str, Any] = field(default_factory=dict)
 
 
@@ -287,6 +289,49 @@ def _load_bronze_assembly(
         ) from error
 
 
+def _load_duplicate_check(
+    raw: Any,
+    *,
+    path: Path,
+    stream_name: str,
+    official_filename: str,
+    bronze_assembly: BronzeAssemblyConfig | None,
+) -> tuple[str, ...]:
+    """Read ``duplicate_check.ignore_json_keys``: values that change without the file changing."""
+
+    if raw is None:
+        return ()
+
+    where = f"{path}: stream {stream_name} duplicate_check"
+
+    if not isinstance(raw, dict) or set(raw) != {"ignore_json_keys"}:
+        raise RuntimeError(f"{where} must be a mapping with ignore_json_keys only")
+
+    keys = raw["ignore_json_keys"]
+
+    if (
+        not isinstance(keys, list)
+        or not keys
+        or not all(
+            isinstance(key, str) and all(part.strip() for part in key.split(".")) for key in keys
+        )
+    ):
+        raise RuntimeError(
+            f"{where} ignore_json_keys must list JSON keys, such as viewCount or owner.displayName"
+        )
+
+    if len(set(keys)) != len(keys):
+        raise RuntimeError(f"{where} ignore_json_keys repeats a key")
+
+    if not official_filename.casefold().endswith(".json"):
+        raise RuntimeError(f"{where} ignore_json_keys needs a .json official_filename")
+
+    if bronze_assembly is not None:
+        raise RuntimeError(f"{where} cannot be combined with bronze_assembly")
+
+    return tuple(keys)
+
+
 def load_source_config(path: str | Path, *, expected_ws_name: str | None = None) -> SourceConfig:
     """Parse and strictly validate a YAML configuration file."""
     path = Path(path)
@@ -347,12 +392,21 @@ def load_source_config(path: str | Path, *, expected_ws_name: str | None = None)
             filename_metadata=filename_metadata,
         )
 
+        ignored_json_keys = _load_duplicate_check(
+            stream_raw.get("duplicate_check"),
+            path=path,
+            stream_name=stream_name,
+            official_filename=official_filename,
+            bronze_assembly=bronze_assembly,
+        )
+
         known_keys = {
             "official_filename",
             "yaml_contract_name",
             "artifact_role",
             "filename_metadata",
             "bronze_assembly",
+            "duplicate_check",
         }
         extra = {key: value for key, value in stream_raw.items() if key not in known_keys}
 
@@ -368,6 +422,7 @@ def load_source_config(path: str | Path, *, expected_ws_name: str | None = None)
             artifact_role=artifact_role,
             filename_metadata=filename_metadata,
             bronze_assembly=bronze_assembly,
+            ignored_json_keys=ignored_json_keys,
             extra=extra,
         )
 
