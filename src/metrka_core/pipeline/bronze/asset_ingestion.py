@@ -19,13 +19,13 @@ from metrka_core.pipeline.bronze.bronze_ingestion import (
     ingest_to_bronze,
 )
 from metrka_core.pipeline.bronze.models import BronzeBatchResult, BronzeIngestResult
+from metrka_core.pipeline.bronze.row_assembly import split_skipped_paths
 from metrka_core.pipeline.bronze.source_batch_fingerprint import fingerprint_source_batch
-from metrka_core.pipeline.bronze.xlsx_batch_ingestion import build_xlsx_batch_marshaled_file
-from metrka_core.pipeline.bronze.xlsx_batch_preparation import (
-    PreparedXlsxSourceBatch,
-    prepare_xlsx_source_batch,
+from metrka_core.pipeline.bronze.source_batch_ingestion import build_batch_marshaled_file
+from metrka_core.pipeline.bronze.source_batch_preparation import (
+    PreparedSourceBatch,
+    prepare_source_batch,
 )
-from metrka_core.pipeline.bronze.xlsx_row_assembly import split_skipped_paths
 from metrka_core.pipeline.models import LandedAsset
 from metrka_core.pipeline.runtime_services import (
     BronzeRunIdGenerator,
@@ -78,21 +78,21 @@ def _group_landed_assets_by_stream(assets: list[LandedAsset]) -> dict[str, tuple
     }
 
 
-def _persist_xlsx_asset_batch(
+def _persist_asset_batch(
     *,
     runtime: ActionRuntime,
     deps: BronzeIngestDeps,
     stream: StreamConfig,
     dataset_id: str,
     assets: tuple[LandedAsset, ...],
-) -> tuple[BronzeIngestResult, PreparedXlsxSourceBatch | None]:
-    """Ingest one configured XLSX stream batch."""
+) -> tuple[BronzeIngestResult, PreparedSourceBatch | None]:
+    """Ingest one configured stream batch."""
     assembly_config = stream.bronze_assembly
     filename_config = stream.filename_metadata
 
     if assembly_config is None or filename_config is None:
         raise RuntimeError(
-            f"Stream {stream.name} does not have complete XLSX Bronze assembly configuration"
+            f"Stream {stream.name} does not have complete Bronze assembly configuration"
         )
 
     input_paths = tuple(asset.path for asset in assets)
@@ -103,8 +103,7 @@ def _persist_xlsx_asset_batch(
     if existing is not None:
         if not existing.bronze_artifacts:
             raise RuntimeError(
-                "Existing XLSX batch has no Bronze artifact manifest: "
-                f"{existing.file.dataset_file_id}"
+                f"Existing batch has no Bronze artifact manifest: {existing.file.dataset_file_id}"
             )
 
         return (
@@ -150,18 +149,18 @@ def _persist_xlsx_asset_batch(
             store=deps.quality_checks,
         )
 
-        _raise_if_quality_failed("XLSX batch pre-checks", pre_quality)
+        _raise_if_quality_failed("Batch pre-checks", pre_quality)
 
     bronze_run_dir = deps.bronze_store.prepare_run_dir(run_id=bronze_run_id)
 
-    prepared = prepare_xlsx_source_batch(
+    prepared = prepare_source_batch(
         assets=assets,
         output_dir=bronze_run_dir,
         filename_config=filename_config,
         assembly_config=assembly_config,
     )
 
-    marshaled_file = build_xlsx_batch_marshaled_file(
+    marshaled_file = build_batch_marshaled_file(
         prepared=prepared,
         dataset_id=dataset_id,
         dataset_file_id=dataset_file_id,
@@ -206,7 +205,7 @@ def _persist_xlsx_asset_batch(
         BronzeOutput(files=quality_output_files), ids=quality_ids, store=deps.quality_checks
     )
 
-    _raise_if_quality_failed("XLSX batch post-checks", post_quality)
+    _raise_if_quality_failed("Batch post-checks", post_quality)
 
     deps.marshal.record_bronze_artifacts(
         marshaled_file.dataset_file_id,
@@ -224,7 +223,7 @@ def _persist_xlsx_asset_batch(
     )
 
     logger.info(
-        "Assembled %d XLSX files into %s with %d rows",
+        "Assembled %d files into %s with %d rows",
         prepared.input_file_count,
         ", ".join(path.name for path in prepared.output_paths),
         prepared.row_count,
@@ -265,7 +264,7 @@ def _split_skipped_assets(
     )
 
 
-def _ingest_xlsx_asset_batch(
+def _ingest_asset_batch(
     *,
     runtime: ActionRuntime,
     deps: BronzeIngestDeps,
@@ -273,7 +272,7 @@ def _ingest_xlsx_asset_batch(
     dataset_id: str,
     assets: tuple[LandedAsset, ...],
 ) -> BronzeIngestResult:
-    """Ingest one XLSX batch and record its execution receipt."""
+    """Ingest one batch and record its execution receipt."""
     assets, skipped_assets = _split_skipped_assets(stream, assets)
 
     if skipped_assets:
@@ -304,13 +303,13 @@ def _ingest_xlsx_asset_batch(
 
     with run_step(
         dataset=runtime.dataset_name,
-        step="assemble_xlsx_batch",
+        step="assemble_source_batch",
         layer="bronze",
         execution_log_store=deps.execution_logs,
         clock=deps.clock,
         start_meta=start_meta,
     ) as context:
-        result, prepared = _persist_xlsx_asset_batch(
+        result, prepared = _persist_asset_batch(
             runtime=runtime, deps=deps, stream=stream, dataset_id=dataset_id, assets=assets
         )
 
@@ -372,7 +371,7 @@ def ingest_landed_assets(
                     f"Stream {stream_name} configures bronze_assembly without filename_metadata"
                 )
 
-            result = _ingest_xlsx_asset_batch(
+            result = _ingest_asset_batch(
                 runtime=runtime,
                 deps=deps,
                 stream=stream,

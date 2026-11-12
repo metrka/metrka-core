@@ -17,10 +17,10 @@ from metrka_core.pipeline.bronze.filename_metadata import (
     FilenameMetadataConfig,
     FilenameMetadataValueType,
 )
-from metrka_core.pipeline.bronze.xlsx_row_assembly import (
+from metrka_core.pipeline.bronze.row_assembly import (
     BronzeAssemblyConfig,
     BronzeAssemblyStrategy,
-    XlsxReadConfig,
+    SourceReadConfig,
 )
 
 
@@ -273,7 +273,7 @@ def _load_bronze_assembly(
         return BronzeAssemblyConfig(
             strategy=cast(BronzeAssemblyStrategy, strategy),
             output_filename=output_filename,
-            read_config=XlsxReadConfig(
+            read_config=SourceReadConfig(
                 sheet_name=sheet_name,
                 header_row=header_row,
                 drop_fully_empty_rows=drop_empty_rows,

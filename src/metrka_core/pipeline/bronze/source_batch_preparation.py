@@ -1,4 +1,4 @@
-"""Prepare multiple landed XLSX assets as one Bronze stream batch."""
+"""Prepare multiple landed assets of one stream as one Bronze batch."""
 
 from __future__ import annotations
 
@@ -8,20 +8,17 @@ from pathlib import Path
 
 from metrka_core.metadata.artifact import ArtifactRole
 from metrka_core.pipeline.bronze.filename_metadata import FilenameMetadataConfig
+from metrka_core.pipeline.bronze.row_assembly import BronzeAssemblyConfig, write_assembled_csvs
 from metrka_core.pipeline.bronze.source_batch_fingerprint import (
     SourceBatchFingerprint,
     fingerprint_source_batch,
-)
-from metrka_core.pipeline.bronze.xlsx_row_assembly import (
-    BronzeAssemblyConfig,
-    write_assembled_xlsx_csvs,
 )
 from metrka_core.pipeline.models import LandedAsset
 
 
 @dataclass(frozen=True, slots=True)
-class PreparedXlsxSourceBatch:
-    """One assembled XLSX source batch ready for Bronze registration.
+class PreparedSourceBatch:
+    """One assembled source batch ready for Bronze registration.
 
     ``output_paths`` holds one Bronze CSV, or one per group when the assembly groups files.
     ``row_count`` is their total and ``column_count`` the widest of them.
@@ -40,26 +37,26 @@ class PreparedXlsxSourceBatch:
     column_count: int
 
 
-def prepare_xlsx_source_batch(
+def prepare_source_batch(
     *,
     assets: tuple[LandedAsset, ...],
     output_dir: Path,
     filename_config: FilenameMetadataConfig,
     assembly_config: BronzeAssemblyConfig,
-) -> PreparedXlsxSourceBatch:
-    """Validate and combine one stream's XLSX source assets."""
+) -> PreparedSourceBatch:
+    """Validate and combine one stream's source assets."""
     if not assets:
-        raise ValueError("Cannot prepare an empty XLSX source batch")
+        raise ValueError("Cannot prepare an empty source batch")
 
     stream_names = {asset.stream_name for asset in assets}
 
     if len(stream_names) != 1:
-        raise ValueError("XLSX source batch must contain exactly one stream")
+        raise ValueError("Source batch must contain exactly one stream")
 
     artifact_roles = {asset.artifact_role for asset in assets}
 
     if len(artifact_roles) != 1:
-        raise ValueError("XLSX source batch must contain one artifact role")
+        raise ValueError("Source batch must contain one artifact role")
 
     ordered_assets = tuple(
         sorted(assets, key=lambda asset: (asset.path.name.casefold(), asset.path.as_posix()))
@@ -69,7 +66,7 @@ def prepare_xlsx_source_batch(
 
     fingerprint = fingerprint_source_batch(input_paths)
 
-    assembly_results = write_assembled_xlsx_csvs(
+    assembly_results = write_assembled_csvs(
         paths=input_paths,
         output_dir=output_dir,
         filename_config=filename_config,
@@ -84,7 +81,7 @@ def prepare_xlsx_source_batch(
 
     source_last_modified = max(source_last_modified_values) if source_last_modified_values else None
 
-    return PreparedXlsxSourceBatch(
+    return PreparedSourceBatch(
         stream_name=ordered_assets[0].stream_name,
         input_paths=input_paths,
         source_capture_ids=tuple(sorted({asset.source_capture_id for asset in ordered_assets})),

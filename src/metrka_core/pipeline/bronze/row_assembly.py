@@ -23,7 +23,7 @@ from metrka_core.pipeline.bronze.filename_metadata import (
 
 
 @dataclass(frozen=True, slots=True)
-class XlsxReadConfig:
+class SourceReadConfig:
     """Options used when reading source XLSX files."""
 
     sheet_name: str | int = 0
@@ -64,7 +64,7 @@ class BronzeAssemblyConfig:
 
     strategy: BronzeAssemblyStrategy
     output_filename: str | None
-    read_config: XlsxReadConfig
+    read_config: SourceReadConfig
     group_files_by: str | None = None
     outputs: tuple[tuple[str, str], ...] = field(default_factory=tuple)
     skip_values: tuple[str, ...] = field(default_factory=tuple)
@@ -125,7 +125,7 @@ class BronzeAssemblyConfig:
 
 
 @dataclass(frozen=True, slots=True)
-class XlsxRowAssemblyResult:
+class RowAssemblyResult:
     """Result of writing one combined Bronze CSV."""
 
     output_path: Path
@@ -135,7 +135,7 @@ class XlsxRowAssemblyResult:
 
 
 def assemble_xlsx_rows(
-    *, paths: Iterable[Path], filename_config: FilenameMetadataConfig, read_config: XlsxReadConfig
+    *, paths: Iterable[Path], filename_config: FilenameMetadataConfig, read_config: SourceReadConfig
 ) -> pd.DataFrame:
     """Read XLSX files and combine their rows with filename metadata."""
     indexed_paths = index_paths_by_filename_member_key(paths, filename_config)
@@ -210,8 +210,8 @@ def write_assembled_xlsx_csv(
     paths: Iterable[Path],
     output_path: Path,
     filename_config: FilenameMetadataConfig,
-    read_config: XlsxReadConfig,
-) -> XlsxRowAssemblyResult:
+    read_config: SourceReadConfig,
+) -> RowAssemblyResult:
     """Combine source XLSX files and write one deterministic CSV."""
     input_paths = tuple(paths)
 
@@ -226,7 +226,7 @@ def write_assembled_xlsx_csv(
 
     combined.to_csv(output_path, index=False, lineterminator="\n")
 
-    return XlsxRowAssemblyResult(
+    return RowAssemblyResult(
         output_path=output_path,
         input_file_count=len(input_paths),
         row_count=len(combined.index),
@@ -332,13 +332,13 @@ def group_paths_by_filename_value(
     return {filename: tuple(group) for filename, group in grouped.items()}
 
 
-def write_assembled_xlsx_csvs(
+def write_assembled_csvs(
     *,
     paths: Iterable[Path],
     output_dir: Path,
     filename_config: FilenameMetadataConfig,
     assembly_config: BronzeAssemblyConfig,
-) -> tuple[XlsxRowAssemblyResult, ...]:
+) -> tuple[RowAssemblyResult, ...]:
     """Write every Bronze CSV the assembly configures, in output-name order."""
     input_paths = tuple(paths)
 
@@ -384,7 +384,7 @@ def write_assembled_xlsx_csvs(
         output_path = output_dir / filename
         combined.to_csv(output_path, index=False, lineterminator="\n")
         results.append(
-            XlsxRowAssemblyResult(
+            RowAssemblyResult(
                 output_path=output_path,
                 input_file_count=input_file_count,
                 row_count=len(combined.index),

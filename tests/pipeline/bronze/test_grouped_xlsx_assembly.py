@@ -12,14 +12,14 @@ from metrka_core.pipeline.bronze.filename_metadata import (
     FilenameMetadataColumn,
     FilenameMetadataConfig,
 )
-from metrka_core.pipeline.bronze.xlsx_batch_ingestion import build_xlsx_batch_marshaled_file
-from metrka_core.pipeline.bronze.xlsx_batch_preparation import prepare_xlsx_source_batch
-from metrka_core.pipeline.bronze.xlsx_row_assembly import (
+from metrka_core.pipeline.bronze.row_assembly import (
     BronzeAssemblyConfig,
-    XlsxReadConfig,
+    SourceReadConfig,
     split_skipped_paths,
-    write_assembled_xlsx_csvs,
+    write_assembled_csvs,
 )
+from metrka_core.pipeline.bronze.source_batch_ingestion import build_batch_marshaled_file
+from metrka_core.pipeline.bronze.source_batch_preparation import prepare_source_batch
 from metrka_core.pipeline.models import LandedAsset
 
 OUTPUTS = (
@@ -48,7 +48,7 @@ def _grouped_config() -> BronzeAssemblyConfig:
     return BronzeAssemblyConfig(
         strategy="xlsx_rows",
         output_filename=None,
-        read_config=XlsxReadConfig(),
+        read_config=SourceReadConfig(),
         group_files_by="rate_type",
         outputs=OUTPUTS,
     )
@@ -80,7 +80,7 @@ def _lung_files(folder: Path) -> list[Path]:
 def test_grouped_assembly_writes_one_csv_per_value(tmp_path: Path) -> None:
     files = _lung_files(tmp_path / "landing")
 
-    results = write_assembled_xlsx_csvs(
+    results = write_assembled_csvs(
         paths=files,
         output_dir=tmp_path / "bronze",
         filename_config=_filename_config(),
@@ -127,7 +127,7 @@ def test_a_value_without_an_output_is_an_error(tmp_path: Path) -> None:
     )
 
     with pytest.raises(ValueError, match="rate_type values that no output names: 'other'"):
-        write_assembled_xlsx_csvs(
+        write_assembled_csvs(
             paths=files,
             output_dir=tmp_path / "bronze",
             filename_config=_filename_config(),
@@ -141,7 +141,7 @@ def test_an_output_without_files_is_an_error(tmp_path: Path) -> None:
     files = [path for path in _lung_files(tmp_path / "landing") if "__crude__" in path.name]
 
     with pytest.raises(ValueError, match=r"No files have rate_type value\(s\) \['age_adjusted'\]"):
-        write_assembled_xlsx_csvs(
+        write_assembled_csvs(
             paths=files,
             output_dir=tmp_path / "bronze",
             filename_config=_filename_config(),
@@ -159,7 +159,7 @@ def test_mismatched_columns_within_a_group_write_no_output(tmp_path: Path) -> No
     )
 
     with pytest.raises(ValueError, match="XLSX source columns do not match"):
-        write_assembled_xlsx_csvs(
+        write_assembled_csvs(
             paths=files,
             output_dir=tmp_path / "bronze",
             filename_config=_filename_config(),
@@ -180,7 +180,7 @@ def test_prepared_batch_lists_every_output(tmp_path: Path) -> None:
         for path in _lung_files(tmp_path / "landing")
     )
 
-    prepared = prepare_xlsx_source_batch(
+    prepared = prepare_source_batch(
         assets=assets,
         output_dir=tmp_path / "bronze",
         filename_config=_filename_config(),
@@ -195,7 +195,7 @@ def test_prepared_batch_lists_every_output(tmp_path: Path) -> None:
     assert prepared.row_count == 4
     assert prepared.column_count == 8
 
-    marshaled = build_xlsx_batch_marshaled_file(
+    marshaled = build_batch_marshaled_file(
         prepared=prepared,
         dataset_id="fl_healthcharts.lung_cancer_incidence",
         dataset_file_id="dataset-file-1",
@@ -229,7 +229,7 @@ def test_prepared_batch_lists_every_output(tmp_path: Path) -> None:
 )
 def test_assembly_config_rejects_unclear_outputs(kwargs: dict, message: str) -> None:
     with pytest.raises(ValueError, match=message):
-        BronzeAssemblyConfig(strategy="xlsx_rows", read_config=XlsxReadConfig(), **kwargs)
+        BronzeAssemblyConfig(strategy="xlsx_rows", read_config=SourceReadConfig(), **kwargs)
 
 
 def _main_yaml(bronze_assembly: str) -> str:
@@ -312,7 +312,7 @@ def _crude_only_config() -> BronzeAssemblyConfig:
     return BronzeAssemblyConfig(
         strategy="xlsx_rows",
         output_filename=None,
-        read_config=XlsxReadConfig(),
+        read_config=SourceReadConfig(),
         group_files_by="rate_type",
         outputs=(("crude", "lung_cancer_incidence.csv"),),
         skip_values=("age_adjusted",),
@@ -322,7 +322,7 @@ def _crude_only_config() -> BronzeAssemblyConfig:
 def test_a_skipped_value_writes_no_output(tmp_path: Path) -> None:
     files = _lung_files(tmp_path / "landing")
 
-    results = write_assembled_xlsx_csvs(
+    results = write_assembled_csvs(
         paths=files,
         output_dir=tmp_path / "bronze",
         filename_config=_filename_config(),
@@ -373,7 +373,7 @@ def test_a_value_neither_output_nor_skipped_is_still_an_error(tmp_path: Path) ->
     )
 
     with pytest.raises(ValueError, match="skipped values: \\['age_adjusted'\\]"):
-        write_assembled_xlsx_csvs(
+        write_assembled_csvs(
             paths=files,
             output_dir=tmp_path / "bronze",
             filename_config=_filename_config(),
@@ -384,7 +384,7 @@ def test_a_value_neither_output_nor_skipped_is_still_an_error(tmp_path: Path) ->
 def test_a_skipped_value_without_files_is_fine(tmp_path: Path) -> None:
     files = [path for path in _lung_files(tmp_path / "landing") if "__crude__" in path.name]
 
-    results = write_assembled_xlsx_csvs(
+    results = write_assembled_csvs(
         paths=files,
         output_dir=tmp_path / "bronze",
         filename_config=_filename_config(),
@@ -423,7 +423,7 @@ def test_a_skipped_value_without_files_is_fine(tmp_path: Path) -> None:
 )
 def test_assembly_config_rejects_unclear_skips(kwargs: dict, message: str) -> None:
     with pytest.raises(ValueError, match=message):
-        BronzeAssemblyConfig(strategy="xlsx_rows", read_config=XlsxReadConfig(), **kwargs)
+        BronzeAssemblyConfig(strategy="xlsx_rows", read_config=SourceReadConfig(), **kwargs)
 
 
 def test_source_config_reads_skip_as_a_skipped_value(tmp_path: Path) -> None:
