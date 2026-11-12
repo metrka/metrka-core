@@ -16,6 +16,7 @@ import yaml
 
 from metrka_core.transform.cast_types import SILVER_CAST_TYPE_NAMES, is_date_like_cast_type
 from metrka_core.transform.ops.casting import parse_decimal_cast_type
+from metrka_core.transform.ops.split import SPLIT_KEYS, SPLIT_PART_RULE_KEYS, published_column_rules
 from metrka_core.transform.profiles import ProfileError, expand_profiles
 from metrka_core.utils.yaml_loading import safe_load
 
@@ -28,6 +29,7 @@ ALLOWED_COLUMNS_RULE_KEYS = {
     "format_in",
     "case",
     "normalize_values",
+    "split",
     "meta",
 }
 
@@ -44,11 +46,12 @@ def validate_contract_file(path: Path) -> dict[str, Any]:
     1. YAML loads
     2. every table has columns
     3. every column has rename_to and cast_to
-    4. no duplicate renamed columns per table
-    5. canonical_order exactly matches final renamed columns
-    6. supported rule keys only
-    7. normalize_values rules are structurally valid and carry non-empty reasons
-    8. supported cast types only
+    4. split rules name a separator and at least two parts, each with its own cast_to
+    5. no duplicate final columns per table, counting split parts
+    6. canonical_order exactly matches final columns
+    7. supported rule keys only
+    8. normalize_values rules are structurally valid and carry non-empty reasons
+    9. supported cast types only
 
     Returns parsed YAML mapping if valid.
     Raises ContractValidationError if invalid.
@@ -68,7 +71,10 @@ def validate_contract_file(path: Path) -> dict[str, Any]:
         logger.debug("Validating Silver contract table: %s", table_name)
         columns = _validate_table_has_columns(table_name, table_cfg)
         renamed_columns = _validate_columns_have_required_fields(table_name, columns)
-        _validate_no_duplicate_renamed_columns(table_name, renamed_columns)
+        split_parts = _validate_split_rules(table_name, columns)
+        _validate_no_duplicate_renamed_columns(table_name, renamed_columns + split_parts)
+        # A column split with exclude_column: true is not published; its parts are.
+        renamed_columns = list(published_column_rules(columns))
         _validate_canonical_order_matches(table_name, table_cfg, renamed_columns)
         _validate_supported_rule_keys(table_name, columns)
         _validate_normalize_values_rules(table_name, columns)
@@ -143,6 +149,82 @@ def _validate_columns_have_required_fields(table_name: str, columns: dict[str, A
 
         renamed_columns.append(rename_to)
     return renamed_columns
+
+
+def _validate_split_rules(table_name: str, columns: dict[str, Any]) -> list[str]:
+    """Check every split rule and return the names of the columns it adds."""
+
+    parts: list[str] = []
+
+    for source_col, rule in columns.items():
+        if "split" not in rule:
+            continue
+
+        where = f"{table_name}.{source_col}.split"
+        split = rule["split"]
+
+        if (
+            not isinstance(split, dict)
+            or not {"separator", "into"} <= set(split)
+            or not set(split) <= SPLIT_KEYS
+        ):
+            raise ContractValidationError(
+                f"{where} must be a mapping with separator, into and optionally exclude_column"
+            )
+
+        if not isinstance(split.get("exclude_column", False), bool):
+            raise ContractValidationError(f"{where}.exclude_column must be true or false")
+
+        separator = split["separator"]
+
+        if not isinstance(separator, str) or not separator:
+            raise ContractValidationError(f"{where}.separator must be a non-empty string")
+
+        if rule["cast_to"] != "string":
+            raise ContractValidationError(
+                f"{table_name}.{source_col}: a split column must use cast_to: string"
+            )
+
+        into = split["into"]
+
+        if not isinstance(into, dict) or len(into) < 2:
+            raise ContractValidationError(
+                f"{where}.into must map at least two column names to their rules"
+            )
+
+        for part, part_rule in into.items():
+            if not isinstance(part, str) or not part.strip():
+                raise ContractValidationError(
+                    f"{where}.into column names must be non-empty strings"
+                )
+
+            part_where = f"{where}.into.{part}"
+
+            if not isinstance(part_rule, dict):
+                raise ContractValidationError(f"{part_where} must be a mapping")
+
+            unknown_keys = sorted(set(part_rule) - SPLIT_PART_RULE_KEYS)
+
+            if unknown_keys:
+                raise ContractValidationError(
+                    f"{part_where}: unsupported rule keys: {unknown_keys}"
+                )
+
+            if "case" in part_rule and part_rule["case"] not in ALLOWED_CASE_TYPES:
+                raise ContractValidationError(
+                    f"{part_where}: unsupported case {part_rule['case']!r}. "
+                    f"Allowed: {ALLOWED_CASE_TYPES}"
+                )
+
+            cast_to = part_rule.get("cast_to")
+
+            if not isinstance(cast_to, str) or not cast_to.strip():
+                raise ContractValidationError(f"{part_where}: missing or invalid 'cast_to'")
+
+            _validate_cast_rule(part_where, part_rule)
+            parts.append(part)
+
+    return parts
 
 
 def _validate_no_duplicate_renamed_columns(table_name: str, rename_columns: list[str]) -> None:
@@ -363,24 +445,28 @@ def _validate_normalize_values_rules(table_name: str, columns: dict[str, Any]) -
 def _validate_supported_cast_types(table_name: str, columns: dict[str, Any]) -> None:
     """Validate simple and parameterized Silver cast types."""
     for source_col, rule in columns.items():
-        cast_to = rule["cast_to"]
+        _validate_cast_rule(f"{table_name}.{source_col}", rule)
 
-        is_simple_type = cast_to in SILVER_CAST_TYPE_NAMES
-        is_decimal_type = parse_decimal_cast_type(cast_to) is not None
 
-        if not is_simple_type and not is_decimal_type:
-            raise ContractValidationError(
-                f"{table_name}.{source_col}: unsupported cast_to {cast_to!r} "
-            )
+def _validate_cast_rule(where: str, rule: dict[str, Any]) -> None:
+    """Check one column's cast type and, for a date-like type, its format_in."""
 
-        format_in = rule.get("format_in")
+    cast_to = rule["cast_to"]
 
-        if is_date_like_cast_type(cast_to) and (
-            not isinstance(format_in, str) or not format_in.strip()
-        ):
-            raise ContractValidationError(
-                f"{table_name}.{source_col}: 'cast_to' requires a non-empty string 'format_in' rule"
-            )
+    is_simple_type = cast_to in SILVER_CAST_TYPE_NAMES
+    is_decimal_type = parse_decimal_cast_type(cast_to) is not None
+
+    if not is_simple_type and not is_decimal_type:
+        raise ContractValidationError(f"{where}: unsupported cast_to {cast_to!r} ")
+
+    format_in = rule.get("format_in")
+
+    if is_date_like_cast_type(cast_to) and (
+        not isinstance(format_in, str) or not format_in.strip()
+    ):
+        raise ContractValidationError(
+            f"{where}: 'cast_to' requires a non-empty string 'format_in' rule"
+        )
 
 
 def _validate_parent_child_reconciliation(
@@ -467,7 +553,7 @@ def _validate_parent_child_reconciliation(
     if not isinstance(measure_column, str) or measure_column not in available_columns:
         raise ContractValidationError(f"{table_name}: unknown measure_column {measure_column!r}")
 
-    final_column_rules = {rule["rename_to"]: rule for rule in table_cfg["columns"].values()}
+    final_column_rules = published_column_rules(table_cfg["columns"])
     measure_cast_type = final_column_rules[measure_column]["cast_to"]
 
     is_numeric_measure = (
