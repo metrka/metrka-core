@@ -7,8 +7,8 @@ from metrka_core.pipeline.bronze.filename_metadata import (
     FilenameMetadataColumn,
     FilenameMetadataConfig,
 )
-from metrka_core.pipeline.bronze.xlsx_row_assembly import (
-    XlsxReadConfig,
+from metrka_core.pipeline.bronze.row_assembly import (
+    SourceReadConfig,
     assemble_xlsx_rows,
     write_assembled_xlsx_csv,
 )
@@ -51,7 +51,7 @@ def test_assembles_xlsx_rows_with_filename_metadata(tmp_path: Path) -> None:
     result = assemble_xlsx_rows(
         paths=(file_2003, file_2002),
         filename_config=_filename_config(),
-        read_config=XlsxReadConfig(),
+        read_config=SourceReadConfig(),
     )
 
     assert result.to_dict(orient="records") == [
@@ -90,7 +90,7 @@ def test_writes_one_combined_bronze_csv(tmp_path: Path) -> None:
         paths=(file_2003, file_2002),
         output_path=output_path,
         filename_config=_filename_config(),
-        read_config=XlsxReadConfig(),
+        read_config=SourceReadConfig(),
     )
 
     written = pd.read_csv(output_path)
@@ -116,7 +116,7 @@ def test_rejects_mismatched_xlsx_source_columns(tmp_path: Path) -> None:
         assemble_xlsx_rows(
             paths=(file_2002, file_2003),
             filename_config=_filename_config(),
-            read_config=XlsxReadConfig(),
+            read_config=SourceReadConfig(),
         )
 
     message = str(error.value)
@@ -144,7 +144,7 @@ def test_rejects_reordered_xlsx_source_columns(tmp_path: Path) -> None:
         assemble_xlsx_rows(
             paths=(file_2002, file_2003),
             filename_config=_filename_config(),
-            read_config=XlsxReadConfig(),
+            read_config=SourceReadConfig(),
         )
 
     message = str(error.value)
@@ -171,7 +171,7 @@ def test_does_not_write_csv_when_xlsx_columns_do_not_match(tmp_path: Path) -> No
             paths=(file_2002, file_2003),
             output_path=output_path,
             filename_config=_filename_config(),
-            read_config=XlsxReadConfig(),
+            read_config=SourceReadConfig(),
         )
 
     assert not output_path.exists()

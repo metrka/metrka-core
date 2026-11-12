@@ -7,9 +7,9 @@ from metrka_core.pipeline.bronze.filename_metadata import (
     FilenameMetadataColumn,
     FilenameMetadataConfig,
 )
-from metrka_core.pipeline.bronze.xlsx_batch_ingestion import build_xlsx_batch_marshaled_file
-from metrka_core.pipeline.bronze.xlsx_batch_preparation import prepare_xlsx_source_batch
-from metrka_core.pipeline.bronze.xlsx_row_assembly import BronzeAssemblyConfig, XlsxReadConfig
+from metrka_core.pipeline.bronze.row_assembly import BronzeAssemblyConfig, SourceReadConfig
+from metrka_core.pipeline.bronze.source_batch_ingestion import build_batch_marshaled_file
+from metrka_core.pipeline.bronze.source_batch_preparation import prepare_source_batch
 from metrka_core.pipeline.models import LandedAsset
 
 
@@ -52,10 +52,10 @@ def test_prepares_one_bronze_batch_from_multiple_xlsx_files(tmp_path: Path) -> N
     )
 
     assembly_config = BronzeAssemblyConfig(
-        strategy="xlsx_rows", output_filename="county.csv", read_config=XlsxReadConfig()
+        strategy="xlsx_rows", output_filename="county.csv", read_config=SourceReadConfig()
     )
 
-    result = prepare_xlsx_source_batch(
+    result = prepare_source_batch(
         assets=assets,
         output_dir=tmp_path / "bronze-run",
         filename_config=filename_config,
@@ -78,7 +78,7 @@ def test_prepares_one_bronze_batch_from_multiple_xlsx_files(tmp_path: Path) -> N
 
     ingested_at = datetime(2026, 10, 3, 12, 0, tzinfo=UTC)
 
-    marshaled_file = build_xlsx_batch_marshaled_file(
+    marshaled_file = build_batch_marshaled_file(
         prepared=result,
         dataset_id="fl_healthcharts.county",
         dataset_file_id="dataset-file-1",

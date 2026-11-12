@@ -14,8 +14,8 @@ from metrka_core.pipeline.bronze.filename_metadata import (
     FilenameMetadataConfig,
 )
 from metrka_core.pipeline.bronze.models import BronzeIngestResult
+from metrka_core.pipeline.bronze.row_assembly import BronzeAssemblyConfig, SourceReadConfig
 from metrka_core.pipeline.bronze.source_batch_fingerprint import fingerprint_source_batch
-from metrka_core.pipeline.bronze.xlsx_row_assembly import BronzeAssemblyConfig, XlsxReadConfig
 from metrka_core.pipeline.models import LandedAsset
 from metrka_core.storage.bronze_store import LocalBronzeArtifactStore
 
@@ -70,7 +70,9 @@ def test_ingests_multiple_xlsx_assets_as_one_stream_batch(tmp_path: Path) -> Non
                 official_filename="cid0321__*.xlsx",
                 filename_metadata=filename_metadata,
                 bronze_assembly=BronzeAssemblyConfig(
-                    strategy="xlsx_rows", output_filename="county.csv", read_config=XlsxReadConfig()
+                    strategy="xlsx_rows",
+                    output_filename="county.csv",
+                    read_config=SourceReadConfig(),
                 ),
             )
         },
@@ -93,7 +95,7 @@ def test_ingests_multiple_xlsx_assets_as_one_stream_batch(tmp_path: Path) -> Non
     )
 
     with patch(
-        "metrka_core.pipeline.bronze.asset_ingestion._ingest_xlsx_asset_batch",
+        "metrka_core.pipeline.bronze.asset_ingestion._ingest_asset_batch",
         return_value=ingest_result,
     ) as ingest_batch:
         result = ingest_landed_assets(runtime=MagicMock(), deps=deps, assets=assets)
@@ -142,7 +144,9 @@ def test_persists_multiple_xlsx_assets_as_one_bronze_file(tmp_path: Path) -> Non
                 official_filename="cid0321__*.xlsx",
                 filename_metadata=filename_metadata,
                 bronze_assembly=BronzeAssemblyConfig(
-                    strategy="xlsx_rows", output_filename="county.csv", read_config=XlsxReadConfig()
+                    strategy="xlsx_rows",
+                    output_filename="county.csv",
+                    read_config=SourceReadConfig(),
                 ),
             )
         },
@@ -241,8 +245,8 @@ def test_persists_multiple_xlsx_assets_as_one_bronze_file(tmp_path: Path) -> Non
 
     started_event, finished_event = execution_events
 
-    assert started_event.step == "assemble_xlsx_batch"
-    assert finished_event.step == "assemble_xlsx_batch"
+    assert started_event.step == "assemble_source_batch"
+    assert finished_event.step == "assemble_source_batch"
     assert finished_event.status == "success"
     assert finished_event.counts.success == 1
     assert finished_event.counts.failed == 0
@@ -288,7 +292,7 @@ def test_persists_a_grouped_xlsx_batch_as_one_file_per_value(tmp_path: Path) -> 
                 bronze_assembly=BronzeAssemblyConfig(
                     strategy="xlsx_rows",
                     output_filename=None,
-                    read_config=XlsxReadConfig(),
+                    read_config=SourceReadConfig(),
                     group_files_by="rate_type",
                     outputs=(("crude", "lung.csv"), ("age_adjusted", "lung_age_adjusted.csv")),
                 ),
@@ -378,7 +382,7 @@ def test_skipped_files_stay_out_of_bronze_and_its_fingerprint(tmp_path: Path) ->
                 bronze_assembly=BronzeAssemblyConfig(
                     strategy="xlsx_rows",
                     output_filename=None,
-                    read_config=XlsxReadConfig(),
+                    read_config=SourceReadConfig(),
                     group_files_by="rate_type",
                     outputs=(("crude", "lung.csv"),),
                     skip_values=("age_adjusted",),

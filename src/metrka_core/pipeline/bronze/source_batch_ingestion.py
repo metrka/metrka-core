@@ -1,23 +1,19 @@
-"""Persistence preparation for assembled XLSX Bronze batches."""
+"""Persistence preparation for assembled Bronze batches."""
 
 from __future__ import annotations
 
 from datetime import datetime
 
 from metrka_core.metadata.file_marshal_models import MarshaledFile
-from metrka_core.pipeline.bronze.xlsx_batch_preparation import PreparedXlsxSourceBatch
+from metrka_core.pipeline.bronze.source_batch_preparation import PreparedSourceBatch
 
 
-def build_xlsx_batch_marshaled_file(
-    *,
-    prepared: PreparedXlsxSourceBatch,
-    dataset_id: str,
-    dataset_file_id: str,
-    ingested_at: datetime,
+def build_batch_marshaled_file(
+    *, prepared: PreparedSourceBatch, dataset_id: str, dataset_file_id: str, ingested_at: datetime
 ) -> MarshaledFile:
-    """Build one FileMarshal record for an assembled XLSX batch."""
+    """Build one FileMarshal record for an assembled batch."""
     if len(prepared.source_urls) != 1:
-        raise ValueError("XLSX source batch must have exactly one source URL")
+        raise ValueError("Source batch must have exactly one source URL")
 
     # A grouped assembly writes several CSVs; the record names them all.
     source_file_name = ", ".join(path.name for path in prepared.output_paths)
