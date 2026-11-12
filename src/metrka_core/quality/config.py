@@ -42,6 +42,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 from metrka_core.quality.models import QualitySeverity
 from metrka_core.transform.ops.casting import parse_decimal_cast_type
+from metrka_core.transform.ops.split import published_column_rules
 from metrka_core.utils.yaml_loading import safe_load
 
 FLAG_RULES = frozenset({"not_null", "is_null", "unique"})
@@ -261,8 +262,8 @@ def contract_tables(contract: Mapping[str, Any]) -> dict[str, dict[str, str]]:
 
     return {
         str(table_key): {
-            str(column["rename_to"]): str(column["cast_to"])
-            for column in table.get("columns", {}).values()
+            name: str(column["cast_to"])
+            for name, column in published_column_rules(table.get("columns", {})).items()
         }
         for table_key, table in contract.get("tables", {}).items()
     }

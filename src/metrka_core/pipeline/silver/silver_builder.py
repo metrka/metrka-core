@@ -43,6 +43,7 @@ from metrka_core.quality.store import QualityCheckStore
 from metrka_core.storage.atomic_writes import atomic_write_text
 from metrka_core.storage.checksums import sha256_file
 from metrka_core.storage.save import save_table
+from metrka_core.transform.ops.split import published_column_rules
 from metrka_core.transform.schema import apply_transformation
 
 logger = logging.getLogger(__name__)
@@ -489,14 +490,9 @@ def _utc_isoformat(value: datetime) -> str:
 def _preview_date_columns(table_cfg: dict[str, Any]) -> set[str]:
     date_columns: set[str] = set()
 
-    for source_name, spec in table_cfg.get("columns", {}).items():
-        if not isinstance(spec, dict):
-            continue
-
-        if spec.get("cast_to") != "date":
-            continue
-
-        date_columns.add(str(spec.get("rename_to") or source_name))
+    for name, spec in published_column_rules(table_cfg.get("columns", {})).items():
+        if spec.get("cast_to") == "date":
+            date_columns.add(name)
 
     return date_columns
 

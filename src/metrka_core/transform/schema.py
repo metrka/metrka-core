@@ -4,7 +4,8 @@ schema.py
 This exists so upstream creativity does not become downstream archaeology.
 
 Schema-driven transformations for a table:
-rename => normalize_missing => cast => parse_dates => case => final order.
+rename => normalize_missing => normalize_values => split => cast => parse_dates => case
+=> reconcile => final order.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from metrka_core.transform.cast_types import is_date_like_cast_type, resolve_sil
 from metrka_core.transform.ops.casting import cast_columns, normalize_missing
 from metrka_core.transform.ops.dates import parse_dates
 from metrka_core.transform.ops.reconciliation import reconcile_parent_child_rows
+from metrka_core.transform.ops.split import excludes_column, published_column_rules, split_columns
 from metrka_core.transform.ops.text import convert_case, normalize_values
 from metrka_core.transform.result import TransformationResult
 
@@ -170,6 +172,26 @@ def _build_normalize_values_rules(
     return rules
 
 
+def _build_splits(
+    cols_cfg: dict[str, Any], rename_map: dict[str, str]
+) -> dict[str, tuple[str, tuple[str, ...], bool]]:
+    """Map each column to split, by its final name, to its separator, parts and exclusion."""
+
+    splits = {
+        _tgt_name(src, rename_map): (
+            str(spec["split"]["separator"]),
+            tuple(str(part) for part in spec["split"]["into"]),
+            excludes_column(spec),
+        )
+        for src, spec in cols_cfg.items()
+        if isinstance(spec, dict) and isinstance(spec.get("split"), dict)
+    }
+    if splits:
+        logger.info("split_columns: %d columns", len(splits))
+        logger.debug("splits=%s", splits)
+    return splits
+
+
 def _apply_canonical_order(df: pd.DataFrame, canonical: list[str] | None) -> pd.DataFrame:
     if not canonical:
         logger.info("canonical order: none")
@@ -190,7 +212,7 @@ def apply_transformation(df: pd.DataFrame, cfg: dict[str, Any]) -> Transformatio
     """
     Apply table schema rules to a DataFrame.
 
-    Order: validate => rename => normalize_missing => normalize_values => cast => parse_dates => case => reconcile => reorder.
+    Order: validate => rename => normalize_missing => normalize_values => split => cast => parse_dates => case => reconcile => reorder.
     Contract mismatches always stop transformation of the current dataset.
     """
 
@@ -219,25 +241,32 @@ def apply_transformation(df: pd.DataFrame, cfg: dict[str, Any]) -> Transformatio
     data_df = normalize_result.data
     evidence.extend(normalize_result.evidence)
 
-    # 5) cast types
-    cast_map = _build_cast_map(cols_cfg, rename_map)
+    # 5) split columns into their parts; from here on a part is a column like any other
+    split_result = split_columns(data_df, _build_splits(cols_cfg, rename_map))
+    data_df = split_result.data
+    evidence.extend(split_result.evidence)
+
+    published_rules = published_column_rules(cols_cfg)
+
+    # 6) cast types
+    cast_map = _build_cast_map(published_rules, {})
     cast_result = cast_columns(data_df, cast_map)
     data_df = cast_result.data
     evidence.extend(cast_result.evidence)
 
-    # 6) date parsing
-    date_specs = _build_date_specs(cols_cfg, rename_map)
+    # 7) date parsing
+    date_specs = _build_date_specs(published_rules, {})
     date_result = parse_dates(data_df, date_specs)
     data_df = date_result.data
     evidence.extend(date_result.evidence)
 
-    # 7) case conversions
-    case_map = _build_case_map(cols_cfg, rename_map)
+    # 8) case conversions
+    case_map = _build_case_map(published_rules, {})
     case_result = convert_case(data_df, case_map)
     data_df = case_result.data
     evidence.extend(case_result.evidence)
 
-    # 8) reconcile parent totals with child rows
+    # 9) reconcile parent totals with child rows
     reconciliation_config = cfg.get("parent_child_reconciliation")
 
     if reconciliation_config is not None:
@@ -245,7 +274,7 @@ def apply_transformation(df: pd.DataFrame, cfg: dict[str, Any]) -> Transformatio
         data_df = reconciliation_result.data
         evidence.extend(reconciliation_result.evidence)
 
-    # 9) final column order
+    # 10) final column order
     data_df = _apply_canonical_order(data_df, cfg.get("canonical_order"))
 
     logger.info("done: rows=%d cols=%d", len(data_df), len(data_df.columns))

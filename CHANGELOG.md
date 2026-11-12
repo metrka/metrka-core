@@ -7,6 +7,67 @@ modules remain implementation details unless they are listed in
 `PUBLIC_API.md`.
 
 
+## [Unreleased]
+
+### Configuration
+
+- Configuration YAML files (contracts, profiles, `main.yaml` and its templates,
+  `quality.yaml`, the glossary, the workspace registry and the metadata
+  database config) are refused when a mapping repeats a key. Before, the last
+  value silently replaced the earlier ones, so `metrka workspace validate`
+  passed a contract with a block written twice.
+- A dataset folder may keep streams with `artifact_role: documentation` beside
+  its data stream, such as the source's own description of the file, captured
+  with every download. The data stream must still be the one named like the
+  folder, and a second data stream is still refused.
+- A stream of JSON files may list `duplicate_check.ignore_json_keys`, dotted
+  keys such as `viewCount` whose values change without the file changing.
+  Bronze then finds an earlier copy of the file by a hash that sets those keys
+  to null and ignores layout; the file is still kept and verified byte for
+  byte, and its record keeps both hashes and the ignored keys.
+- `normalize_values` accepts `replace_with: null`, which publishes the value as
+  missing, such as a source's `Suppressed` in a count column that is cast to
+  `int`. The change is recorded like any other replacement, with its reason
+  and an empty published value. Contracts that use it are refused by 1.1.0.
+  The Silver engine hash changes, so approve the new engine release; every
+  Silver dataset then rebuilds once with unchanged data.
+- A contract column of type `string` may be split at a separator into columns
+  of their own: `split: {separator: "/", into: {race: {cast_to: string},
+  sex: {cast_to: string}}}`. Each part has its own `cast_to` and may have
+  `format_in`, `case` and `meta`, and quality rules and total reconciliation
+  may name it. The column itself is still published and listed in
+  `canonical_order` with its parts, unless `exclude_column: true` leaves it
+  out (the default is false). A present value that does not split into
+  exactly as many pieces as there are parts stops the table, and the error
+  names how many values failed with examples. Pieces are trimmed, an empty
+  piece is missing, and a missing value leaves every part missing. The split
+  is recorded as `column_split` evidence with its separator, parts and counts.
+  Contracts that use it are refused by 1.1.0, and published versions that use
+  it need a catalog that knows the split parts and the `column_split`
+  evidence kind.
+
+### Pipeline
+
+- A pipeline without a `silver.process` step no longer checks the table rules
+  of `quality.yaml` against contracts. Before, a dataset whose `quality.yaml`
+  already had rules for its Silver table could not run Bronze alone: with the
+  Silver step left out no contract was read, and the run stopped with
+  "quality.yaml names table ..., which no contract defines". The rules are
+  checked again once the Silver step is back.
+- `pipeline.steps: []` runs acquisition only: the source is captured with its
+  receipt and the capture is registered in the metadata database, and no
+  Bronze or Silver step runs. Before, `steps` had to name at least one action.
+  A `steps` value that is not a list is still refused.
+- A failed column rule in `quality.yaml` now says what the failing rows do,
+  such as "3 row(s) where hospitalizations_count is missing". Before, it
+  repeated the rule after "breaks:" ("breaks: has no missing values"), which
+  read as the opposite. The check, its `expected` record and a passed check's
+  text are unchanged; earlier runs keep their old text.
+- The Bronze execution step that assembles a stream's files is recorded as
+  `assemble_source_batch` instead of `assemble_xlsx_batch`. Earlier runs keep
+  the old name in the execution log.
+
+
 ## [1.1.0] - 2026-10-27
 
 ### Configuration
