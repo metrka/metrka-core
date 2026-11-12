@@ -49,13 +49,17 @@ def columns_match(table: pd.DataFrame, *, expected: Sequence[str], allow_extra: 
 def not_null(table: pd.DataFrame, *, column: str) -> Outcome:
     """Every value in the column is present."""
 
-    return _rows_rule(table, column, table[column].isna(), "has no missing values")
+    return _rows_rule(
+        table, column, table[column].isna(), "has no missing values", broken="is missing"
+    )
 
 
 def is_null(table: pd.DataFrame, *, column: str) -> Outcome:
     """Every value in the column is missing."""
 
-    return _rows_rule(table, column, table[column].notna(), "is always missing")
+    return _rows_rule(
+        table, column, table[column].notna(), "is always missing", broken="has a value"
+    )
 
 
 def unique(table: pd.DataFrame, *, columns: Sequence[str]) -> Outcome:
@@ -84,14 +88,18 @@ def min_value(table: pd.DataFrame, *, column: str, minimum: float) -> Outcome:
     """Every present value is at least ``minimum``."""
 
     values = _decimals(table[column])
-    return _rows_rule(table, column, values < _decimal(minimum), f"is >= {minimum}")
+    return _rows_rule(
+        table, column, values < _decimal(minimum), f"is >= {minimum}", broken=f"is below {minimum}"
+    )
 
 
 def max_value(table: pd.DataFrame, *, column: str, maximum: float) -> Outcome:
     """Every present value is at most ``maximum``."""
 
     values = _decimals(table[column])
-    return _rows_rule(table, column, values > _decimal(maximum), f"is <= {maximum}")
+    return _rows_rule(
+        table, column, values > _decimal(maximum), f"is <= {maximum}", broken=f"is above {maximum}"
+    )
 
 
 def between(table: pd.DataFrame, *, column: str, low: float, high: float) -> Outcome:
@@ -99,7 +107,9 @@ def between(table: pd.DataFrame, *, column: str, low: float, high: float) -> Out
 
     values = _decimals(table[column])
     outside = (values < _decimal(low)) | (values > _decimal(high))
-    return _rows_rule(table, column, outside, f"is between {low} and {high}")
+    return _rows_rule(
+        table, column, outside, f"is between {low} and {high}", broken=f"is outside {low} to {high}"
+    )
 
 
 def allowed_values(table: pd.DataFrame, *, column: str, values: Sequence[Any]) -> Outcome:
@@ -107,25 +117,49 @@ def allowed_values(table: pd.DataFrame, *, column: str, values: Sequence[Any]) -
 
     series = table[column]
     not_allowed = series.notna() & ~series.isin(list(values))
-    return _rows_rule(table, column, not_allowed, f"is one of {list(values)}")
+    return _rows_rule(
+        table,
+        column,
+        not_allowed,
+        f"is one of {list(values)}",
+        broken=f"is not one of {list(values)}",
+    )
 
 
 def matches_pattern(table: pd.DataFrame, *, column: str, pattern: str) -> Outcome:
     """Every present value, written as text, matches the regular expression."""
 
     values = table[column].dropna().astype(str)
-    return _rows_rule(table, column, ~values.str.fullmatch(pattern), f"matches {pattern}")
+    return _rows_rule(
+        table,
+        column,
+        ~values.str.fullmatch(pattern),
+        f"matches {pattern}",
+        broken=f"does not match {pattern}",
+    )
 
 
 def forbidden_values(table: pd.DataFrame, *, column: str, values: Sequence[Any]) -> Outcome:
     """No value is one of ``values``."""
 
     forbidden = table[column].isin(list(values))
-    return _rows_rule(table, column, forbidden, f"is never one of {list(values)}")
+    return _rows_rule(
+        table,
+        column,
+        forbidden,
+        f"is never one of {list(values)}",
+        broken=f"is one of {list(values)}",
+    )
 
 
-def _rows_rule(table: pd.DataFrame, column: str, bad: pd.Series, rule: str) -> Outcome:
-    """Turn a mask of rows that break a column rule into an outcome."""
+def _rows_rule(
+    table: pd.DataFrame, column: str, bad: pd.Series, rule: str, *, broken: str
+) -> Outcome:
+    """Turn a mask of rows that break a column rule into an outcome.
+
+    ``rule`` says what every row should do and ``broken`` what a failing row does, so a
+    failure reads "3 row(s) where count is missing" and not "breaks: has no missing values".
+    """
 
     if table.empty:
         return Outcome.skipped(f"No rows to check for {column}.")
@@ -135,7 +169,7 @@ def _rows_rule(table: pd.DataFrame, column: str, bad: pd.Series, rule: str) -> O
 
     return Outcome.of(
         count == 0,
-        f"{column} {rule}." if count == 0 else f"{count} row(s) where {column} breaks: {rule}.",
+        f"{column} {rule}." if count == 0 else f"{count} row(s) where {column} {broken}.",
         expected={"column": column, "rule": rule},
         actual={
             "failed_row_count": count,

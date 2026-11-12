@@ -151,6 +151,45 @@ def test_not_null_counts_missing_values() -> None:
     assert outcome.actual["failed_row_count"] == 1
 
 
+def test_a_failed_column_rule_names_what_the_rows_do() -> None:
+    table = pd.DataFrame(
+        {
+            "count": pd.array([None, -2, 12], dtype="Int64"),
+            "kind": ["a", "b", "c"],
+            "code": ["A1", "B2", "33"],
+        }
+    )
+
+    summaries = [
+        tables.not_null(table, column="count").summary,
+        tables.is_null(table, column="kind").summary,
+        tables.min_value(table, column="count", minimum=0).summary,
+        tables.max_value(table, column="count", maximum=10).summary,
+        tables.between(table, column="count", low=0, high=10).summary,
+        tables.allowed_values(table, column="kind", values=("a",)).summary,
+        tables.forbidden_values(table, column="kind", values=("b",)).summary,
+        tables.matches_pattern(table, column="code", pattern=r"[A-Z]\d").summary,
+    ]
+
+    assert summaries == [
+        "1 row(s) where count is missing.",
+        "3 row(s) where kind has a value.",
+        "1 row(s) where count is below 0.",
+        "1 row(s) where count is above 10.",
+        "2 row(s) where count is outside 0 to 10.",
+        "2 row(s) where kind is not one of ['a'].",
+        "1 row(s) where kind is one of ['b'].",
+        "1 row(s) where code does not match [A-Z]\\d.",
+    ]
+
+
+def test_a_passed_column_rule_still_states_the_rule() -> None:
+    table = pd.DataFrame({"count": pd.array([1, 2], dtype="Int64")})
+
+    assert tables.not_null(table, column="count").summary == "count has no missing values."
+    assert tables.min_value(table, column="count", minimum=0).summary == "count is >= 0."
+
+
 def test_unique_reports_duplicated_rows() -> None:
     table = pd.DataFrame({"county": ["A", "A", "B"], "year": [2020, 2020, 2020]})
 
