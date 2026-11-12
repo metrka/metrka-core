@@ -7,7 +7,7 @@ modules remain implementation details unless they are listed in
 `PUBLIC_API.md`.
 
 
-## [Unreleased]
+## [1.2.0] - 2026-11-12
 
 ### Configuration
 
